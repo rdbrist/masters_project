@@ -11,8 +11,8 @@ def main():
     as_flat_file = config.as_flat_file
     folder = config.data_folder if as_flat_file else config.perid_data_folder
     result = read_all_bg(config)
-    write_read_record(result, as_flat_file, folder, config.bg_file, file_type='csv')
-    write_read_record(result, as_flat_file, folder, config.bg_file, file_type='parquet')
+    write_read_record(result, as_flat_file, folder, config.bg_csv_file, file_type='csv')
+    write_read_record(result, as_flat_file, folder, config.bg_parquet_file, file_type='parquet')
     print(f'Execution time: {timedelta(seconds=(time.time() - start_time))}')
 
 

@@ -131,7 +131,8 @@ class Configuration:
     bg_csv_file_start = '_entries'
     bg_csv_file_android = 'BgReadings.csv'
     android_upload_info = 'UploadInfo.csv'
-    bg_file = 'bg_df.csv'
+    bg_csv_file = 'bg_df.csv'
+    bg_parquet_file = 'bg_df.parquet'
     device_file = 'device_status_dedubed.csv'
 
     # device status files
@@ -171,10 +172,14 @@ class Configuration:
         'openaps/iob/netbasalinsulin': pd.Float32Dtype(),
         'openaps/iob/activity': str,
     }
-    flat_device_status_file_name = 'device_status_tz_naive_df.csv'
-    flat_device_status_file = data_folder + flat_device_status_file_name
-    dedub_flat_device_status_file_name = 'device_status_tz_naive_df_dedubed.csv'
-    dedub_flat_device_status_file = data_folder + dedub_flat_device_status_file_name
+    flat_device_status_csv_file_name = 'device_status_tz_naive_df.csv'
+    flat_device_status_parquet_file_name = 'device_status_tz_naive_df.parquet'
+    flat_device_status_csv_file = data_folder + flat_device_status_csv_file_name
+    flat_device_status_parquet_file = data_folder + flat_device_status_parquet_file_name
+    dedub_flat_device_status_csv_file_name = 'device_status_tz_naive_df_dedubed.csv'
+    dedub_flat_device_status_parquet_file_name = 'device_status_tz_naive_df_dedubed.parquet'
+    dedub_flat_device_status_csv_file = data_folder + dedub_flat_device_status_csv_file_name
+    dedub_flat_device_status_parquet_file = data_folder + dedub_flat_device_status_parquet_file_name
 
     # columns to keep
     # TODO use generalised cols instead
