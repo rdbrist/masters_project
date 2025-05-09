@@ -94,7 +94,6 @@ def read_all_bg(config: Configuration):
     return read_all(config, read_bg_from_zip)
 
 
-
 # reads all device status files into a list of read records
 def read_all_device_status(config):
     return read_all(config, read_device_status_from_zip)
@@ -191,6 +190,7 @@ def read_entries_file_into_df(archive, file, read_record, config):
             except:
                 print(f'ID {read_record.zip_id}: Could not read file: {file}')
 
+
 # reads device status file into df and adds it to read_record
 def read_device_status_file_into_df(archive, file, read_record, config):
     read_record.system = OpenAPSConfigs.system_name  # TODO set to appropriate system once others read too
@@ -221,6 +221,7 @@ def headers_in_file(file):
     header = pd.read_csv(file, nrows=0)
     return header.columns
 
+
 def parse_standard_date(date_str):
     formats = [
         '%Y-%m-%d %H:%M:%S',
@@ -243,6 +244,7 @@ def parse_standard_date(date_str):
 
     return pd.NaT
 
+
 def parse_int_date(date_str):
     try:
         numeric_dt = pd.to_numeric(date_str)
@@ -256,6 +258,7 @@ def parse_int_date(date_str):
         return result
     except ValueError:
         return pd.NaT
+
 
 def parse_int_and_standard_date(date_str):
 
@@ -278,6 +281,7 @@ def parse_int_and_standard_date(date_str):
 
     return pd.NaT
 
+
 def correct_odd_tz(date_str):
     tz_translate = {' CEST': ' +0200',
                    ' EDT': ' +0400',
@@ -289,6 +293,7 @@ def correct_odd_tz(date_str):
         date_str = date_str.replace(key, value)
 
     return parse_standard_date(date_str)
+
 
 def parse_date_string(date_str):
     if pd.isna(date_str):
@@ -303,6 +308,7 @@ def parse_date_string(date_str):
         return parsed_dt
 
     raise ValueError(f'Could not parse date {date_str}')
+
 
 def parse_date_columns(df_time_cols: Union[pd.Series, pd.DataFrame]) -> pd.DataFrame:
     """
@@ -333,6 +339,7 @@ def parse_date_columns(df_time_cols: Union[pd.Series, pd.DataFrame]) -> pd.DataF
 
     return parsed_cols
 
+
 # reads OpenAPS device status file
 def read_device_status_file_and_convert_date(actual_headers, config, file_to_read):
     time_cols = [k for k in config.time_cols() if k in actual_headers]  # check columns that are in this file
@@ -350,6 +357,7 @@ def read_device_status_file_and_convert_date(actual_headers, config, file_to_rea
             raise
 
     return df
+
 
 # reads android bg data
 # def read_all_android_aps_files(config):
