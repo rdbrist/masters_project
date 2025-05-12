@@ -62,11 +62,12 @@ class GeneralisedCols:
 
 
 @dataclass
-class   Resampling:
+class Resampling:
     max_gap_in_min = None
     # how big the gap between two datetime stamps can be
     sample_rule = None
-    # the frequency of the regular time series after resampling: 1H a reading every hour, 1D a reading every day
+    # the frequency of the regular time series after resampling: 1H a reading
+    # every hour, 1D a reading every day
 
     description = 'None'
     agg_cols = [Aggregators.min, Aggregators.max, Aggregators.mean,
@@ -93,7 +94,8 @@ class Irregular(Resampling):
 @dataclass
 class Hourly(Resampling):
     max_gap_in_min = 60
-    # there needs to be a reading at least every hour for the data points to be resampled for that hour
+    # there needs to be a reading at least every hour for the data points to
+    # be resampled for that hour
     sample_rule = '1h'
     needs_max_gap_checking = False
     description = 'Hourly'
@@ -138,7 +140,7 @@ class Configuration:
     # device status files
     device_status_csv_file_start = '_devicestatus'
     device_status_csv_file_extension = '.csv'
-    device_status_col_type = {  # if None all columns are read, key is column name, value is dtype
+    device_status_col_type = {
         'id': str,
         'created_at': str,
         'device': str,
@@ -174,16 +176,24 @@ class Configuration:
     }
     flat_device_status_csv_file_name = 'device_status_tz_naive_df.csv'
     flat_device_status_parquet_file_name = 'device_status_tz_naive_df.parquet'
-    flat_device_status_csv_file = data_folder + flat_device_status_csv_file_name
-    flat_device_status_parquet_file = data_folder + flat_device_status_parquet_file_name
-    dedub_flat_device_status_csv_file_name = 'device_status_tz_naive_df_dedubed.csv'
-    dedub_flat_device_status_parquet_file_name = 'device_status_tz_naive_df_dedubed.parquet'
-    dedub_flat_device_status_csv_file = data_folder + dedub_flat_device_status_csv_file_name
-    dedub_flat_device_status_parquet_file = data_folder + dedub_flat_device_status_parquet_file_name
+    flat_device_status_csv_file = (
+            data_folder + flat_device_status_csv_file_name)
+    flat_device_status_parquet_file = (
+            data_folder + flat_device_status_parquet_file_name)
+    dedub_flat_device_status_csv_file_name = \
+        'device_status_tz_naive_df_dedubed.csv'
+    dedub_flat_device_status_parquet_file_name = \
+        'device_status_tz_naive_df_dedubed.parquet'
+    dedub_flat_device_status_csv_file = (
+            data_folder + dedub_flat_device_status_csv_file_name)
+    dedub_flat_device_status_parquet_file = (
+            data_folder + dedub_flat_device_status_parquet_file_name)
 
     # columns to keep
     # TODO use generalised cols instead
-    keep_columns = [OpenAPSConfigs.datetime, OpenAPSConfigs.iob, OpenAPSConfigs.bg,
+    keep_columns = [OpenAPSConfigs.datetime,
+                    OpenAPSConfigs.iob,
+                    OpenAPSConfigs.bg,
                     OpenAPSConfigs.cob]
 
     # Android APS has different format
@@ -197,7 +207,9 @@ class Configuration:
     @staticmethod
     def info_columns():
         # returns the columns that have other info but not values to resample
-        return [GeneralisedCols.datetime, GeneralisedCols.id, GeneralisedCols.system]
+        return [GeneralisedCols.datetime,
+                GeneralisedCols.id,
+                GeneralisedCols.system]
 
     @staticmethod
     def value_columns_to_resample():
@@ -235,17 +247,20 @@ class Configuration:
                 ]
 
     def enacted_cols(self):
-        return [k for k in self.device_status_col_type.keys() if 'enacted' in k]
+        return [k for k in self.device_status_col_type.keys()
+                if 'enacted' in k]
 
     def iob_cols(self):
-        return [k for k in self.device_status_col_type.keys() if 'openaps/iob/' in k]
+        return [k for k in self.device_status_col_type.keys()
+                if 'openaps/iob/' in k]
 
     def pump_cols(self):
         return [k for k in self.device_status_col_type.keys() if 'pump/' in k]
 
     def time_cols(self):
         return ['created_at', 'openaps/enacted/deliverAt', 'pump/clock'] \
-               + [k for k in self.device_status_col_type.keys() if 'time' in str(k).lower()]
+               + [k for k in self.device_status_col_type.keys()
+                  if 'time' in str(k).lower()]
 
     def flat_preprocessed_file_for(self, sampling: Resampling):
         return path.join(self.data_folder, sampling.csv_file_name())

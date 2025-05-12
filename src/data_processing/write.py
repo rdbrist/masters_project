@@ -5,7 +5,12 @@ from src.data_processing.format import as_flat_dataframe
 
 # writes either a flat file (multiple ids) or a file in a per id folder
 # keep_cols is a list of columns to keep, if None all columns will be kept
-def write_read_record(records, as_flat_file, folder, file_name, keep_cols=None, file_type='csv'):
+def write_read_record(records,
+                      as_flat_file,
+                      folder,
+                      file_name,
+                      keep_cols=None,
+                      file_type='csv'):
     if as_flat_file:
         # turn read records into a flat dataframe
         df = as_flat_dataframe(records, False, keep_cols=keep_cols)

@@ -1,12 +1,13 @@
 # formats read records into useful data formats
 import pandas as pd
-
 from src.data_processing.read import ReadRecord
 
 
-# takes a list of ReadRecords and creates one flat dataframe adding zip_id as id column
-# only keeps_cols specified, all if set to None which is default
-def as_flat_dataframe(records: [ReadRecord], drop_na: bool = False, keep_cols=None):
+# Takes a list of ReadRecords and creates one flat dataframe adding zip_id as
+# id column. Only keeps_cols specified, all if set to None which is default
+def as_flat_dataframe(records: [ReadRecord],
+                      drop_na: bool = False,
+                      keep_cols=None):
     result = None
     for record in records:
         # get df with id column
