@@ -70,6 +70,7 @@ class Resampling:
     # every hour, 1D a reading every day
 
     description = 'None'
+    needs_max_gap_checking = False
     agg_cols = [Aggregators.min, Aggregators.max, Aggregators.mean,
                 Aggregators.std, Aggregators.count]
 
@@ -104,6 +105,31 @@ class Hourly(Resampling):
     def csv_file_name():
         return 'hourly_iob_cob_bg.csv'
 
+@dataclass
+class FifteenMinute(Resampling):
+    max_gap_in_min = 15
+    # there needs to be a reading at least every 15min for the data points to
+    # be resampled for that hour
+    sample_rule = '15min'
+    needs_max_gap_checking = False
+    description = 'FifteenMinute'
+
+    @staticmethod
+    def csv_file_name():
+        return '15min_iob_cob_bg.csv'
+
+@dataclass
+class FiveMinute(Resampling):
+    max_gap_in_min = 5
+    # there needs to be a reading at least every 5 min for the data points to
+    # be resampled for that hour
+    sample_rule = '5min'
+    needs_max_gap_checking = False
+    description = 'FiveMinute'
+
+    @staticmethod
+    def csv_file_name():
+        return '5min_iob_cob_bg.csv'
 
 @dataclass
 class Daily(Resampling):

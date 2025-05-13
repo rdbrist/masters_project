@@ -76,7 +76,10 @@ def test_validate_sampling_rate(cob_instance):
     df.set_index(["id", "datetime"], inplace=True)
     cob_instance.dataset = df
     cob_instance.sampling_rate = 15
-    assert not cob_instance._validate_sampling_rate()
+    with pytest.raises(ValueError,
+                       match='Sampling rate 15 does not match the minute values '
+                             'for ID 1.'):
+        cob_instance._validate_sampling_rate()
 
     # Scenario 3: Sampling rate not set
     cob_instance.sampling_rate = None
@@ -86,20 +89,25 @@ def test_validate_sampling_rate(cob_instance):
     cob_instance.sampling_rate = "15"
     assert not cob_instance._validate_sampling_rate()
 
-    # Scenario 5: Multiple IDs with valid and invalid minute factors
-    data = {
-        "id": [1, 1, 1, 2, 2, 2],
-        "datetime": [
-            "2023-01-01 00:00", "2023-01-01 00:15", "2023-01-01 00:30",
-            "2023-01-01 00:01", "2023-01-01 00:16", "2023-01-01 00:31"
-        ]
-    }
+@pytest.mark.parametrize("id, datetimes, expected_error", [
+    (1, ["2023-01-01 00:01", "2023-01-01 00:16", "2023-01-01 00:31"],
+     "Sampling rate 15 does not match the minute values for ID 1."),
+    (2, ["2023-01-01 00:02", "2023-01-01 00:17", "2023-01-01 00:32"],
+     "Sampling rate 15 does not match the minute values for ID 2."),
+])
+def test_validate_sampling_rate_with_dynamic_id(cob_instance, id, datetimes,
+                                                expected_error):
+    # Prepare the dataset
+    data = {"id": [id] * len(datetimes), "datetime": datetimes}
     df = pd.DataFrame(data)
     df["datetime"] = pd.to_datetime(df["datetime"])
     df.set_index(["id", "datetime"], inplace=True)
     cob_instance.dataset = df
     cob_instance.sampling_rate = 15
-    assert not cob_instance._validate_sampling_rate()
+
+    # Assert the ValueError with the dynamic ID in the message
+    with pytest.raises(ValueError, match=expected_error):
+        cob_instance._validate_sampling_rate()
 
 def test_read_interim_data_valid_csv(cob_instance, mock_data_dir):
     # Create a valid CSV file with consistent intervals

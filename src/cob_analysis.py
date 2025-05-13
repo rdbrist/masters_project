@@ -8,7 +8,7 @@ from loguru import logger
 from scipy.signal import find_peaks
 
 
-from src.config import PROCESSED_DATA_DIR
+from src.config import INTERIM_DATA_DIR
 
 
 class Cob:
@@ -17,10 +17,13 @@ class Cob:
     CSV or Parquet flat file, that has been read from all archive zip files in
     the raw dataset. The class provides methods for reading the consolidated
     data, exploratory data analysis, processing the data for finding peaks,
-    producing peak features and analysis of those features.
+    producing peak features and analysis of those features. It assumes the data
+    is resampled at an particular interval, but not that the dataset is sparse
+    with regular intervals. The creation of a sparse set for peak extraction and
+    plotting is done in the class itself.
     """
     def __init__(self):
-        self.data_file_path = PROCESSED_DATA_DIR
+        self.data_file_path = INTERIM_DATA_DIR
         self.height = None
         self.distance = None
         self.individual = None
@@ -28,7 +31,7 @@ class Cob:
         self.dataset = None
         self.individual_dataset = None
         self.processed_dataset = None
-        self.sampling_rate = 15  # minutes
+        self.sampling_rate = 15  # minutes, default
 
     def set_parameters(self, height: int, distance: int):
         """
@@ -75,7 +78,7 @@ class Cob:
                       f"consistent.")
                 raise ValueError
         except FileNotFoundError as e:
-            print(f"File not found: {e}")
+            raise FileNotFoundError('File not found.')
         except pd.errors.EmptyDataError as e:
             print(f"No data: {e}")
         except Exception as e:
@@ -116,8 +119,7 @@ class Cob:
                     f"Minute value {m} is not divisible by "
                     f"{interval_minutes} sampling rate.")
                 return False
-            else:
-                return True
+        return True  # If no non-divisible values found
 
     def _validate_sampling_rate(self):
         """
@@ -141,8 +143,8 @@ class Cob:
                          reset_index()['datetime'].
                          sort_values())
             if not Cob._check_minute_factor(datetimes, self.sampling_rate):
-                raise ValueError(f"Sampling rate {self.sampling_rate} does not match the "
-                      f"minute values for ID {p_id}.")
+                raise ValueError(f"Sampling rate {self.sampling_rate} does not "
+                                 f"match the minute values for ID {p_id}.")
         return True
 
     def summarise_interim_data(self):
@@ -185,7 +187,9 @@ class Cob:
     def _interpolate_data(self):
         """
         Process the individual dataset to interpolate missing values.
-        It will reindex to 15-minute intervals prior to interpolation.
+        It will reindex to the sample rate intervals prior to interpolation.
+        This is not the same as resampling. Rather it ensures consecutive
+        intervals in a date range.
         """
         # Check if individual dataset exists
         if self.individual_dataset is None:
@@ -209,8 +213,6 @@ class Cob:
         self.interpolated = True
 
         return df_cob
-
-
 
     @staticmethod
     def _find_peaks(ser: pd.Series, height: int = None, distance: int = None):
@@ -306,7 +308,7 @@ class Cob:
         num_intervals = len(date_rng)
         missing_samples = num_intervals - n
         total_missing = nans + missing_samples
-        days_in_range = num_intervals / 96
+        days_in_range = num_intervals / (24 * 60 / self.sampling_rate)
         total_pc_missing = (total_missing / num_intervals)*100
         days_with_data = (self.individual_dataset.
                           groupby('day').
