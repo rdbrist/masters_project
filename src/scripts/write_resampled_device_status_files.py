@@ -9,15 +9,15 @@ import time
 from src.configurations import Configuration, Irregular, Daily, Hourly, FifteenMinute, FiveMinute
 from src.helper import preprocessed_file_for
 from src.data_processing.read_preprocessed_df import ReadPreprocessedDataFrame
-from src.resampling import ResampleDataFrame
-
+from src.data_processing.resampling import ResampleDataFrame
+from src.config import INTERIM_DATA_DIR
 
 def main():
     start_time = time.time()
     # reads irregular sampled file (create first!) and writes daily and hourly sampled files per id and as flat file
+    flat_file_folder = Path(INTERIM_DATA_DIR)
     config = Configuration()
-    per_id_folder = config.perid_data_folder
-    flat_file_folder = config.data_folder
+    per_id_folder = flat_file_folder / 'perid'
     irregular = Irregular()
     hourly = Hourly()
     daily = Daily()
@@ -84,7 +84,7 @@ def main():
     big_hourly_df.reset_index(inplace=True, drop=True)
     big_daily_df.reset_index(inplace=True, drop=True)
     big_fifteen_minute_df.reset_index(inplace=True, drop=True)
-    big_five_df.reset_index(inplace=True, drop=True)
+    big_five_minute_df.reset_index(inplace=True, drop=True)
 
     # write flat_file dfs
     daily_resampled_file_name = Path(flat_file_folder, daily.csv_file_name())

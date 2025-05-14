@@ -1,19 +1,17 @@
 from dataclasses import dataclass
+from src.config import PROJ_ROOT
 
 import pandas as pd
 import yaml
 from os import path
 
-ROOT_DIR = path.realpath(path.join(path.dirname(__file__), '..'))
-
 
 def load_private_yaml():
-    private_file = path.join(ROOT_DIR, 'private.yaml')
+    private_file = path.join(PROJ_ROOT, 'private.yaml')
     assert (path.exists(private_file))
     with open(private_file, "r") as f:
         config = yaml.safe_load(f)
     return config
-
 
 @dataclass
 class OpenAPSConfigs:
@@ -151,7 +149,7 @@ class Configuration:
     data_dir: str = config['openAPS_data_path']
     as_flat_file = config['flat_file']
     utc_conversion = config['utc_conversion']
-    data_folder = path.join(ROOT_DIR, 'data')
+    data_folder = path.join(PROJ_ROOT, 'data/interim')
     perid_data_folder = path.join(data_folder, 'perid')
 
     # bg files
