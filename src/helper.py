@@ -10,21 +10,23 @@ from src.configurations import Configuration, Resampling
 
 def dataframe_of_read_record_stats(read_records: []):
     result = list(map(dataclasses.asdict, read_records))
-    data = {'zip_id':
-                list(map(lambda x: x.get('zip_id'), result)),
-            'rows':
-                list(map(lambda x: x.get('number_of_rows'), result)),
-            'rows_without_nan':
-                list(map(lambda x: x.get('number_of_rows_without_nan'), result)),
-            'rows_with_nan':
-                list(map(lambda x: x.get('number_of_rows_with_nan'), result)),
-            'earliest_date':
-                list(map(lambda x: x.get('earliest_date'), result)),
-            'newest_date':
-                list(map(lambda x: x.get('newest_date'), result)),
-            'is_android_upload':
-                list(map(lambda x: x.get('is_android_upload'), result))
-            }
+    data = {
+        'zip_id':
+            list(map(lambda x: x.get('zip_id'), result)),
+        'rows':
+            list(map(lambda x: x.get('number_of_rows'), result)),
+        'rows_without_nan':
+            list(map(lambda x: x.get('number_of_rows_without_nan'),
+                     result)),
+        'rows_with_nan':
+            list(map(lambda x: x.get('number_of_rows_with_nan'), result)),
+        'earliest_date':
+            list(map(lambda x: x.get('earliest_date'), result)),
+        'newest_date':
+            list(map(lambda x: x.get('newest_date'), result)),
+        'is_android_upload':
+            list(map(lambda x: x.get('is_android_upload'), result))
+    }
     return pd.DataFrame(data)
 
 

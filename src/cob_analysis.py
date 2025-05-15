@@ -2,12 +2,9 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-from math import gcd
-from functools import reduce
 from loguru import logger
+
 from scipy.signal import find_peaks
-
-
 from src.config import INTERIM_DATA_DIR
 
 
@@ -45,8 +42,8 @@ class Cob:
 
     def read_interim_data(self,
                           file_name: str,
-                          file_type: str='csv',
-                          sampling_rate: int=15):
+                          file_type: str = 'csv',
+                          sampling_rate: int = 15):
         """
         Read raw data from CSV file and save as parquet file. File is indexed
         by ID and datetime.
@@ -68,8 +65,9 @@ class Cob:
                 path = self.data_file_path / (file_name + '.parquet')
                 self.dataset = pd.read_parquet(path)
             else:
-                raise ValueError("Invalid file type. Must be 'csv' or 'parquet'.")
-            self.dataset.sort_index(level=['id','datetime'], inplace=True)
+                raise ValueError("Invalid file type. "
+                                 "Must be 'csv' or 'parquet'.")
+            self.dataset.sort_index(level=['id', 'datetime'], inplace=True)
             self.summarise_interim_data()
             self.sampling_rate = sampling_rate
             if not self._validate_sampling_rate():
@@ -77,7 +75,7 @@ class Cob:
                       f"data.\nThis needs addressing to make the intervals "
                       f"consistent.")
                 raise ValueError
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             raise FileNotFoundError('File not found.')
         except pd.errors.EmptyDataError as e:
             print(f"No data: {e}")
@@ -86,7 +84,7 @@ class Cob:
 
     @staticmethod
     def _check_consecutive_intervals(datetime_series: pd.Series,
-                        interval_minutes: int) -> bool:
+                                     interval_minutes: int) -> bool:
         """
         Check if a series of datetimes are at a consistent interval.
         :param datetime_series: A pandas Series of datetime objects.
@@ -105,7 +103,7 @@ class Cob:
 
     @staticmethod
     def _check_minute_factor(datetime_series: pd.Series,
-                        interval_minutes: int) -> bool:
+                             interval_minutes: int) -> bool:
         """
         Check the sampling rate is a factor for all the minute inteval values.
         :param datetime_series: A pandas Series of datetime objects.

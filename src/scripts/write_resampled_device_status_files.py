@@ -6,15 +6,18 @@ from pathlib import Path
 import pandas as pd
 import time
 
-from src.configurations import Configuration, Irregular, Daily, Hourly, FifteenMinute, FiveMinute
+from src.configurations import (Configuration, Irregular, Daily, Hourly,
+                                FifteenMinute, FiveMinute)
 from src.helper import preprocessed_file_for
 from src.data_processing.read_preprocessed_df import ReadPreprocessedDataFrame
 from src.data_processing.resampling import ResampleDataFrame
 from src.config import INTERIM_DATA_DIR
 
+
 def main():
     start_time = time.time()
-    # reads irregular sampled file (create first!) and writes daily and hourly sampled files per id and as flat file
+    # reads irregular sampled file (create first!) and writes daily and hourly
+    # sampled files per id and as flat file
     flat_file_folder = Path(INTERIM_DATA_DIR)
     config = Configuration()
     per_id_folder = flat_file_folder / 'perid'
@@ -35,7 +38,9 @@ def main():
     zip_ids = [basename(normpath(path_str)) for path_str in zip_id_dirs]
     for zip_id in zip_ids:
         # check that irregular file exists otherwise print error
-        file = preprocessed_file_for(config.perid_data_folder, zip_id, irregular)
+        file = preprocessed_file_for(config.perid_data_folder,
+                                     zip_id,
+                                     irregular)
         if file is None:
             missing_zipids.append(zip_id)
             print("No irregular sampled file for zip id: " + zip_id)
@@ -52,13 +57,17 @@ def main():
         five_minute_df = resampler.resample_to(five_minute)
 
         # write pre id
-        daily_resampled_file_name = Path(per_id_folder, zip_id, daily.csv_file_name())
+        daily_resampled_file_name = (
+            Path(per_id_folder, zip_id, daily.csv_file_name()))
         daily_df.to_csv(daily_resampled_file_name)
-        hourly_resampled_file_name = Path(per_id_folder, zip_id, hourly.csv_file_name())
+        hourly_resampled_file_name = (
+            Path(per_id_folder, zip_id, hourly.csv_file_name()))
         hourly_df.to_csv(hourly_resampled_file_name)
-        fifteen_resampled_file_name = Path(per_id_folder, zip_id, fifteen_minute.csv_file_name())
+        fifteen_resampled_file_name = (
+            Path(per_id_folder, zip_id, fifteen_minute.csv_file_name()))
         fifteen_minute_df.to_csv(fifteen_resampled_file_name)
-        five_resampled_file_name = Path(per_id_folder, zip_id, five_minute.csv_file_name())
+        five_resampled_file_name = (
+            Path(per_id_folder, zip_id, five_minute.csv_file_name()))
         five_minute_df.to_csv(five_resampled_file_name)
 
         # add to overall dataframe
@@ -72,7 +81,7 @@ def main():
                 big_hourly_df = pd.concat([big_hourly_df, hourly_df])
             if not daily_df.empty and not daily_df.isna().all().all():
                 big_daily_df = pd.concat([big_daily_df, daily_df])
-            if (not fifteen_minute_df.empty and 
+            if (not fifteen_minute_df.empty and
                     not fifteen_minute_df.isna().all()):
                 big_fifteen_minute_df = (
                     pd.concat([big_fifteen_minute_df, fifteen_minute_df]))
@@ -87,19 +96,23 @@ def main():
     big_five_minute_df.reset_index(inplace=True, drop=True)
 
     # write flat_file dfs
-    daily_resampled_file_name = Path(flat_file_folder, daily.csv_file_name())
+    daily_resampled_file_name = (
+        Path(flat_file_folder, daily.csv_file_name()))
     big_daily_df.to_csv(daily_resampled_file_name)
-    hourly_resampled_file_name = Path(flat_file_folder, hourly.csv_file_name())
+    hourly_resampled_file_name = (
+        Path(flat_file_folder, hourly.csv_file_name()))
     big_hourly_df.to_csv(hourly_resampled_file_name)
-    fifteen_minute_resampled_file_name = Path(flat_file_folder,
-                                              fifteen_minute.csv_file_name())
+    fifteen_minute_resampled_file_name = (
+        Path(flat_file_folder, fifteen_minute.csv_file_name()))
     big_fifteen_minute_df.to_csv(fifteen_minute_resampled_file_name)
-    five_minute_resampled_file_name = Path(flat_file_folder,
-                                           five_minute.csv_file_name())
+    five_minute_resampled_file_name = (
+        Path(flat_file_folder, five_minute.csv_file_name()))
     big_five_minute_df.to_csv(five_minute_resampled_file_name)
 
-    print('Number of zip ids without irregular device status files: ' + str(len(missing_zipids)))
+    print('Number of zip ids without irregular device status files: '
+          + str(len(missing_zipids)))
     print(time.time() - start_time)
+
 
 if __name__ == "__main__":
     main()

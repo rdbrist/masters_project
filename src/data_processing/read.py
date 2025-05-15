@@ -204,7 +204,7 @@ def read_entries_file_into_df(archive, file, read_record, config):
                       rename(columns={'dateString': 'time', 'sgv': 'bg'}))
                 df[['time']] = parse_date_columns(df[['time']])
                 read_record.add(df)
-            except:
+            except Exception:
                 print(f'ID {read_record.zip_id}: Could not read file: {file}')
 
 
@@ -217,7 +217,8 @@ def read_device_status_file_into_df(archive, file, read_record, config):
         with archive.open(file, mode="r") as header_context:
             text_io_wrapper = TextIOWrapper(header_context, encoding="utf-8")
             actual_headers = headers_in_file(text_io_wrapper)
-            missing_headers = [ele for ele in (specific_cols_dic.keys()) if ele not in list(actual_headers)]
+            missing_headers = [ele for ele in (specific_cols_dic.keys())
+                               if ele not in list(actual_headers)]
 
             if missing_headers:
                 if not any("enacted" in h for h in actual_headers):

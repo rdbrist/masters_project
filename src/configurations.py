@@ -13,6 +13,7 @@ def load_private_yaml():
         config = yaml.safe_load(f)
     return config
 
+
 @dataclass
 class OpenAPSConfigs:
     # values for openAPS
@@ -103,6 +104,7 @@ class Hourly(Resampling):
     def csv_file_name():
         return 'hourly_iob_cob_bg.csv'
 
+
 @dataclass
 class FifteenMinute(Resampling):
     max_gap_in_min = 15
@@ -116,6 +118,7 @@ class FifteenMinute(Resampling):
     def csv_file_name():
         return '15min_iob_cob_bg.csv'
 
+
 @dataclass
 class FiveMinute(Resampling):
     max_gap_in_min = 5
@@ -128,6 +131,7 @@ class FiveMinute(Resampling):
     @staticmethod
     def csv_file_name():
         return '5min_iob_cob_bg.csv'
+
 
 @dataclass
 class Daily(Resampling):
