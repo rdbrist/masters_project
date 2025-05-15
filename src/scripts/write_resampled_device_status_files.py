@@ -2,17 +2,52 @@ import os
 from glob import glob
 from os.path import normpath, basename
 from pathlib import Path
-
 import pandas as pd
 import time
 
 from src.configurations import (Configuration, Irregular, Daily, Hourly,
-                                FifteenMinute, FiveMinute)
-from src.helper import preprocessed_file_for
+                                FifteenMinute, FiveMinute, GeneralisedCols)
+from src.helper import preprocessed_file_for, flat_preprocessed_file_for
 from src.data_processing.read_preprocessed_df import ReadPreprocessedDataFrame
 from src.data_processing.resampling import ResampleDataFrame
 from src.config import INTERIM_DATA_DIR
 
+def resample_irregular_flat_file(flat_file_path, output_folder):
+    config = Configuration()
+    irregular = Irregular()
+    daily = Daily()
+    hourly = Hourly()
+    fifteen_minute = FifteenMinute()
+    five_minute = FiveMinute()
+
+    df = pd.read_csv(flat_file_path)
+    df[GeneralisedCols.datetime] = (
+        pd.to_datetime(df[GeneralisedCols.datetime], format='ISO8601'))
+    # Assuming 'zip_id' is the column to group by
+    resampled_dfs = {
+        'daily': [],
+        'hourly': [],
+        'fifteen_minute': [],
+        'five_minute': []
+    }
+
+    for zip_id, group in df.groupby('id'):
+        resampler = ResampleDataFrame(group)
+        resampled_dfs['daily'].append(resampler.resample_to(daily))
+        resampled_dfs['hourly'].append(resampler.resample_to(hourly))
+        resampled_dfs['fifteen_minute'].append(resampler.resample_to(fifteen_minute))
+        resampled_dfs['five_minute'].append(resampler.resample_to(five_minute))
+
+    # Concatenate and write each resampled DataFrame
+    Path(output_folder).mkdir(parents=True, exist_ok=True)
+    pd.concat(resampled_dfs['daily']).reset_index(drop=True).to_csv(
+        Path(output_folder, daily.csv_file_name()), index=False)
+    pd.concat(resampled_dfs['hourly']).reset_index(drop=True).to_csv(
+        Path(output_folder, hourly.csv_file_name()), index=False)
+    pd.concat(resampled_dfs['fifteen_minute']).reset_index(drop=True).to_csv(
+        Path(output_folder, fifteen_minute.csv_file_name()), index=False)
+    pd.concat(resampled_dfs['five_minute']).reset_index(drop=True).to_csv(
+        Path(output_folder, five_minute.csv_file_name()), index=False)
 
 def main():
     start_time = time.time()
@@ -44,6 +79,16 @@ def main():
         if file is None:
             missing_zipids.append(zip_id)
             print("No irregular sampled file for zip id: " + zip_id)
+            if len(missing_zipids) == len(zip_ids):
+                try:
+                    resample_irregular_flat_file(
+                        flat_file_folder / irregular.csv_file_name(),
+                        flat_file_folder)
+                    return
+                except Exception as e:
+                    print(
+                        f"No Per ID files and error resampling flat file: {e}")
+                    return
             continue
 
         # read the irregular file into df

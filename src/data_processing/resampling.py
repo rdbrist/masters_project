@@ -1,3 +1,4 @@
+from decimal import ROUND_HALF_UP, Decimal
 import numpy as np
 import pandas as pd
 
@@ -175,3 +176,9 @@ class ResampleDataFrame:
 
         # reorder columns
         return resulting_df.loc[:, columns]
+
+    @staticmethod
+    def __round_numbers(x):
+        if np.isnan(x):
+            return x
+        return float(Decimal(str(x)).quantize(Decimal('.100'), rounding=ROUND_HALF_UP))

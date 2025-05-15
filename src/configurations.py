@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from src.config import PROJ_ROOT
+from src.config import PROJ_ROOT, INTERIM_DATA_DIR
 
 import pandas as pd
 import yaml
@@ -153,8 +153,8 @@ class Configuration:
     data_dir: str = config['openAPS_data_path']
     as_flat_file = config['flat_file']
     utc_conversion = config['utc_conversion']
-    data_folder = path.join(PROJ_ROOT, 'data/interim')
-    perid_data_folder = path.join(data_folder, 'perid')
+    data_folder = INTERIM_DATA_DIR
+    perid_data_folder = data_folder / 'perid'
 
     # bg files
     bg_csv_file_extension = '.json.csv'
@@ -205,17 +205,17 @@ class Configuration:
     flat_device_status_csv_file_name = 'device_status_tz_naive_df.csv'
     flat_device_status_parquet_file_name = 'device_status_tz_naive_df.parquet'
     flat_device_status_csv_file = (
-            data_folder + flat_device_status_csv_file_name)
+            data_folder / flat_device_status_csv_file_name)
     flat_device_status_parquet_file = (
-            data_folder + flat_device_status_parquet_file_name)
+            data_folder / flat_device_status_parquet_file_name)
     dedub_flat_device_status_csv_file_name = \
         'device_status_tz_naive_df_dedubed.csv'
     dedub_flat_device_status_parquet_file_name = \
         'device_status_tz_naive_df_dedubed.parquet'
     dedub_flat_device_status_csv_file = (
-            data_folder + dedub_flat_device_status_csv_file_name)
+            data_folder / dedub_flat_device_status_csv_file_name)
     dedub_flat_device_status_parquet_file = (
-            data_folder + dedub_flat_device_status_parquet_file_name)
+            data_folder / dedub_flat_device_status_parquet_file_name)
 
     # columns to keep
     # TODO use generalised cols instead
@@ -289,9 +289,6 @@ class Configuration:
         return ['created_at', 'openaps/enacted/deliverAt', 'pump/clock'] \
                + [k for k in self.device_status_col_type.keys()
                   if 'time' in str(k).lower()]
-
-    def flat_preprocessed_file_for(self, sampling: Resampling):
-        return path.join(self.data_folder, sampling.csv_file_name())
 
 
 # Configuration to use for unit tests. This turns Wandb logging off.

@@ -1,7 +1,7 @@
 import pandas as pd
 
 from src.configurations import Configuration, GeneralisedCols, Resampling
-from src.helper import preprocessed_file_for
+from src.helper import preprocessed_file_for, flat_preprocessed_file_for
 from src.data_processing.read import parse_date_columns
 
 
@@ -28,7 +28,8 @@ class ReadPreprocessedDataFrame:
             file = preprocessed_file_for(self.__config.perid_data_folder,
                                          self.__zip_id, self.__sampling)
         else:
-            file = self.__config.flat_preprocessed_file_for(self.__sampling)
+            file = flat_preprocessed_file_for(self.__config.data_folder,
+                                              self.__sampling)
         try:
             df = pd.read_csv(file,
                              dtype={GeneralisedCols.id: str,
@@ -36,7 +37,7 @@ class ReadPreprocessedDataFrame:
                              parse_dates=[GeneralisedCols.datetime]
                              )
             df[GeneralisedCols.datetime] = (
-                parse_date_columns(df[GeneralisedCols.datetime]))
+                pd.to_datetime(df[GeneralisedCols.datetime], format='ISO8601'))
         except FileNotFoundError as e:
             raise FileNotFoundError(e)
 
