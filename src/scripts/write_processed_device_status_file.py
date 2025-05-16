@@ -1,6 +1,6 @@
 from src.configurations import Configuration, Irregular
 from src.config import INTERIM_DATA_DIR
-from src.data_processing.preprocess import dedub_device_status_dataframes
+from src.data_processing.preprocess import dedup_device_status_dataframes
 from src.data_processing.read import read_all_device_status
 from src.data_processing.write import write_read_record
 
@@ -13,10 +13,10 @@ def main():
     as_flat_file = config.as_flat_file
     folder = INTERIM_DATA_DIR if as_flat_file else (INTERIM_DATA_DIR / 'perid')
     result = read_all_device_status(config)
-    de_dub_result = dedub_device_status_dataframes(result)
+    de_dup_result = dedup_device_status_dataframes(result)
 
     # write irregular
-    write_read_record(de_dub_result,
+    write_read_record(de_dup_result,
                       as_flat_file,
                       folder,
                       Irregular.csv_file_name(),

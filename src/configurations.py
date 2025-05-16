@@ -165,7 +165,7 @@ class Configuration:
     android_upload_info = 'UploadInfo.csv'
     bg_csv_file = 'bg_df.csv'
     bg_parquet_file = 'bg_df.parquet'
-    device_file = 'device_status_dedubed.csv'
+    device_file = 'device_status_deduped.csv'
 
     # device status files
     device_status_csv_file_start = '_devicestatus'
@@ -213,14 +213,14 @@ class Configuration:
             data_folder / flat_device_status_csv_file_name)
     flat_device_status_parquet_file = (
             data_folder / flat_device_status_parquet_file_name)
-    dedub_flat_device_status_csv_file_name = (
+    dedup_flat_device_status_csv_file_name = (
             device_file_prefix + 'deduped' + csv_extension)
-    dedub_flat_device_status_parquet_file_name = (
+    dedup_flat_device_status_parquet_file_name = (
             device_file_prefix + 'deduped' + parquet_extension)
-    dedub_flat_device_status_csv_file = (
-            data_folder / dedub_flat_device_status_csv_file_name)
-    dedub_flat_device_status_parquet_file = (
-            data_folder / dedub_flat_device_status_parquet_file_name)
+    dedup_flat_device_status_csv_file = (
+            data_folder / dedup_flat_device_status_csv_file_name)
+    dedup_flat_device_status_parquet_file = (
+            data_folder / dedup_flat_device_status_parquet_file_name)
 
     # columns to keep
     # TODO use generalised cols instead

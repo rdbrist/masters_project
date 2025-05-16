@@ -98,6 +98,13 @@ def read_all_bg(config: Configuration):
 
 # reads all device status files into a list of read records
 def read_all_device_status(config):
+    """
+    Reads all device status files from each zip file without extracting the zip.
+    Return is a list of ReadRecords with the dataframes, consolidating the
+    device status files from each zip file.
+    :param config:
+    :return: ReadRecord list with the dataframes
+    """
     return read_all(config, read_device_status_from_zip)
 
 

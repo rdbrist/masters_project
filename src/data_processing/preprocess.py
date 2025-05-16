@@ -5,11 +5,15 @@ from src.configurations import Configuration
 from src.data_processing.read import ReadRecord
 
 
-# Remove duplicates of rows when the only unique data from row to row is id,
-# created_at and device
-def dedub_device_status_dataframes(read_records: [ReadRecord]):
-    # Remove duplicated entries and nan if the only unique or non nan data is
-    # id, created_at or device
+
+def dedup_device_status_dataframes(read_records: [ReadRecord]):
+    """
+    Remove duplicates of rows when the only unique data from row to row is id,
+    created_at and device
+    :param read_records: List of ReadRecords
+    :return: List of ReadRecords with deduplicated dataframes
+    """
+
     cols_not_all_nan = list(Configuration().device_status_col_type.keys())
     cols_not_all_nan.remove('id')
     cols_not_all_nan.remove('created_at')
