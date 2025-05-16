@@ -3,15 +3,29 @@ import pandas as pd
 from src.cob_analysis import Cob
 
 @pytest.fixture
-def cob_instance():
-    return Cob()
-
-@pytest.fixture
 def mock_data_dir(tmp_path):
     # Create a temporary directory for mock data
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     return data_dir
+
+@pytest.fixture
+def mock_dataset():
+    # Create a mock dataset with a multi-level index
+    data = {
+        'id': [1, 1, 2, 2, 3, 3],
+        'datetime': pd.date_range(start='2023-01-01', periods=6, freq='15min'),
+        'cob max': [10, 20, 30, 40, 50, 60],
+    }
+    df = pd.DataFrame(data)
+    df.set_index(['id', 'datetime'], inplace=True)
+    return df
+
+@pytest.fixture
+def cob_instance(mock_dataset):
+    cob = Cob()
+    cob.dataset = mock_dataset
+    return cob
 
 def test_check_consecutive_intervals(cob_instance):
 
@@ -191,9 +205,27 @@ def test_read_interim_data_valid_parquet(cob_instance, mock_data_dir):
     cob_instance.data_file_path = mock_data_dir
 
     # Call the method
-    cob_instance.read_interim_data(file_name="valid_data", file_type="parquet", sampling_rate=15)
+    cob_instance.read_interim_data(file_name="valid_data",
+                                   file_type="parquet",
+                                   sampling_rate=15)
 
     # Assertions
     assert cob_instance.dataset is not None
     assert not cob_instance.dataset.empty
     assert cob_instance.sampling_rate == 15
+
+def test_get_person_data_valid_id(cob_instance):
+    # Test with a valid ID
+    person_data = cob_instance.get_person_data(1)
+    assert not person_data.empty
+    assert len(person_data) == 2
+    cob_instance.dataset = cob_instance.dataset.drop(columns=['cob max'])
+    with pytest.raises(ValueError, match='Column "cob max" not found in dataset.'):
+        cob_instance.get_person_data(1)
+
+def test_get_person_data_invalid_id(cob_instance):
+    # Test with an invalid ID
+    with pytest.raises(KeyError, match="Individual 999 not found in dataset"):
+        cob_instance.get_person_data(999)
+    with pytest.raises(KeyError, match="xxx"):
+        cob_instance.get_person_data("xxx")

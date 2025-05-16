@@ -150,7 +150,7 @@ class Cob:
         print(f'Number of records: {len(df)}')
         print(f"Number of people: "
               f"{len(df.index.get_level_values('id').drop_duplicates())}")
-        print(f"Systems used: {df['system'].drop_duplicates().values}")
+        print(f"Systems used: \t{df['system'].drop_duplicates().values}")
 
     def get_person_data(self, p_id: int):
         """
@@ -159,7 +159,13 @@ class Cob:
         :return: DataFrame: Data for individual, indexed by datetime. (Does not
         include ID)
         """
-        df = self.dataset.loc[p_id].copy()
+        try:
+            df = self.dataset.loc[p_id].copy()
+        except KeyError:
+            raise KeyError(f'Individual {p_id} not found in dataset.')
+
+        if 'cob max' not in df.columns:
+            raise ValueError(f'Column "cob max" not found in dataset.')
 
         # Trim leading and trailing NaNs from the individual dataset
         first_valid_index = df.first_valid_index()
@@ -175,7 +181,7 @@ class Cob:
             # Add day and time columns
             df['day'] = df.index.date
             df['time'] = df.index.time
-            df = df[['cob max', 'day']]
+            df = df[['cob max', 'day', 'time']]
 
         self.individual = p_id
         self.individual_dataset = df
@@ -220,7 +226,9 @@ class Cob:
                                               distance=distance)
         return peak_indices, properties
 
-    def identify_peaks(self, height: int = None, distance: int = None):
+    def identify_peaks(self, height: int = None,
+                       distance: int = None,
+                       suppress: bool = False):
         """
         Identify peaks in the individual dataset using the find_peaks function
         from scipy.signal.
@@ -240,19 +248,13 @@ class Cob:
 
         # Establish the height and distance parameters
         if height is None and self.height is None:
-            print('No height parameter provided. Please set height parameter '
+            print('No height parameter provided. Please set height '
                   'using height method or provide as parameter.')
         if distance is None and self.distance is None:
             print('No distance parameter provided. Please set distance '
-                  'parameter using distance method or provide as parameter.')
-        if height is None:
-            h = self.height
-        else:
-            h = height
-        if distance is None:
-            d = self.distance
-        else:
-            d = distance
+                  'using distance method or provide as parameter.')
+        h = self.height if height is None else height
+        d = self.distance if distance is None else distance
 
         # Identify peaks
         peaks, heights = self._find_peaks(df_cob['cob interpolate'],
@@ -260,8 +262,9 @@ class Cob:
                                           distance=d)
         df_cob['peak'] = 0
         df_cob.loc[df_cob.index[peaks], 'peak'] = 1
-        print(f'\n{len(peaks)} peaks identified using parameters h={h} and '
-              f'd={d}, and added to individual_dataset as a new column.')
+        if not suppress:
+            print(f'\n{len(peaks)} peaks identified using parameters h={h} and '
+                  f'd={d}, and added to individual_dataset as a new column.')
 
         self.individual_dataset = df_cob
 
@@ -285,7 +288,7 @@ class Cob:
         date_rng = pd.date_range(start=min_date, end=max_date, freq=freq)
         return date_rng
 
-    def summarise_missing(self, variable: str = 'cob max'):
+    def summarise_missing_for_individual(self, variable: str = 'cob max'):
         """
         Summarise missing data in the individual dataset, including basic
         statistics and identifying date ranges with missing data.
@@ -314,6 +317,7 @@ class Cob:
                           reset_index())
         days_count = len(days_with_data)
 
+        print(f'MISSING DATA SUMMARY FOR {self.individual}')
         print(f'Start of time series: {min_date}')
         print(f'End of time series: {max_date}')
         print(f'Samples: {n}')
@@ -337,7 +341,42 @@ class Cob:
         mean_gap_length = gap_lengths.mean() / 96
 
         print(f'Number of gaps: {num_gaps}')
-        print(f'Mean length of gaps (in days): {mean_gap_length:.2f}')
+        print(f'Mean length of gaps (in days): {mean_gap_length:.2f}\n')
+        
+        stats = {
+            'n': n,
+            'nans': nans,
+            'min_date': min_date,
+            'max_date': max_date,
+            'num_intervals': num_intervals,
+            'missing_samples': missing_samples,
+            'total_missing': total_missing,
+            'days_in_range': days_in_range,
+            'total_pc_missing': total_pc_missing,
+            'days_with_data': days_count,
+            'days_with_missing_data': days_in_range - days_count,
+            'num_gaps': num_gaps,
+            'mean_gap_length_days': mean_gap_length
+        }
+        return stats
+
+    def summarise_missing_for_dataset(self):
+        """
+        Summarise missing data across the whole dataset, including basic
+        statistics and identifying date ranges with missing data.
+        :return: DataFrame: DataFrame containing missing data summary for each
+        """
+        if self.dataset is None:
+            print("No dataset available. Please run read_interim_data() first.")
+            return
+
+        missing_df = pd.DataFrame()
+        for p_id in self.dataset.index.get_level_values('id').drop_duplicates():
+            individual_df = self.get_person_data(p_id)
+            individual_df['id'] = p_id
+            missing_df = pd.concat([missing_df, individual_df])
+
+        return missing_df
 
     def plot_peaks(self,
                    title: str = 'COB Peaks',
@@ -372,7 +411,8 @@ class Cob:
     def pre_process_batch(self,
                           ids: list = None,
                           height: int = None,
-                          distance: int = None):
+                          distance: int = None,
+                          suppress: bool = False):
         """
         Pre-processes the data for a batch of individuals, including
         interpolating missing values and identifying peaks.
@@ -381,33 +421,40 @@ class Cob:
             ids (list): List of individual IDs
             height (int): Height parameter for find_peaks function
             distance (int): Distance parameter for find_peaks function
+            suppress (bool): Suppress output messages if True
 
         Returns:
             df_cob (pd.DataFrame): DataFrame containing pre-processed COB data
             for the batch of individuals
         """
+        all_ids = (self.dataset.
+                   index.get_level_values('id').
+                   drop_duplicates().
+                   tolist())
         if self.dataset is None:
             print('No dataset available. Please load data first.')
             return
         if ids is None:
-            print('No IDs provided. Processing all records by default.')
-            ids = (self.dataset.
-                   index.get_level_values('id').
-                   drop_duplicates().
-                   tolist())
+            ids = all_ids
+            print(f'No IDs provided. Processing all {len(ids)} records by default.')
 
         df_all = pd.DataFrame()
+        self.individual_dataset = None
+        self.interpolated = None
 
-        for id in ids:
-            print('Processing ID:', id)
-            if id not in self.dataset.index.get_level_values('id').values:
-                raise ValueError(f'Individual {id} not found in dataset')
-            self.individual_dataset = self.get_person_data(id)
+        for p_id in ids:
+            if not suppress:
+                print('Processing ID:', p_id)
+            if p_id not in self.dataset.index.get_level_values('id').values:
+                raise ValueError(f'Individual {p_id} not found in dataset')
+            self.individual_dataset = self.get_person_data(p_id)
             self.individual_dataset = self._interpolate_data()
             self.individual_dataset = self.identify_peaks(height=height,
-                                                          distance=distance)
-            self.individual_dataset, _ = self.remove_zero_peak_days()
-            self.individual_dataset['id'] = id
+                                                          distance=distance,
+                                                          suppress=suppress)
+            self.individual_dataset, _ = (
+                self.remove_zero_peak_days(suppress=suppress))
+            self.individual_dataset['id'] = p_id
             self.individual_dataset = (self.individual_dataset.
                                        reset_index(names='datetime').
                                        set_index(['id', 'datetime']))
@@ -418,16 +465,17 @@ class Cob:
             self.individual = None
 
             self.processed_dataset = df_all
-            df_all.to_parquet(self.data_file_path +
+            df_all.to_parquet(self.data_file_path /
                               'processed_cob_data.parquet')
 
-        print(f'Number of people processed: {len(ids)}')
-        print(f'The following stats are based on parameters h={height} and '
-              f'd={distance}:')
-        print(f'\tNumber of records: {len(df_all)}')
-        print(f'\tNumber of days with peaks: '
-              f'{len(df_all["day"].drop_duplicates())}')
-        print(f'\tNumber of peaks: {df_all["peak"].sum()}')
+        if not suppress:
+            print(f'Number of people processed: {len(ids)}')
+            print(f'The following stats are based on parameters h={height} and '
+                  f'd={distance}:')
+            print(f'\tNumber of records: {len(df_all)}')
+            print(f'\tNumber of days with peaks: '
+                  f'{len(df_all["day"].drop_duplicates())}')
+            print(f'\tNumber of peaks: {df_all["peak"].sum()}')
 
         return df_all
 
@@ -438,7 +486,7 @@ class Cob:
         try:
             self.processed_dataset = (
                 pd.read_parquet(
-                    self.data_file_path + 'processed_cob_data.parquet'))
+                    self.data_file_path / 'processed_cob_data.parquet'))
             df = self.processed_dataset.copy()
             print(f'Number of records: {len(df)}')
             print(f"Number of people: "
@@ -451,7 +499,8 @@ class Cob:
         except Exception as e:
             print(f"An error occurred: {e}")
 
-    def remove_zero_peak_days(self, variable: str = 'cob interpolate'):
+    def remove_zero_peak_days(self, variable: str = 'cob interpolate',
+                              suppress: bool = False):
         """
         Removes days with no peaks from an individual dataset, based on the
         interpolated data by default. (The individual dataset hsa a one-level
@@ -484,11 +533,12 @@ class Cob:
         zero_data_days = df_agg_by_day[df_agg_by_day['removed'] == 1].index
         df_cob = df_cob.loc[~df_cob['day'].isin(zero_data_days)]
         days = df_cob['day'].drop_duplicates()
-        if len(zero_data_days) > 0:
-            print(f'For ID {self.individual}: {len(zero_data_days)}'
-                  f' days with no peaks removed, {len(days)} remain.')
-        else:
-            print('No days with zero peaks found.')
+        if not suppress:
+            if len(zero_data_days) > 0:
+                print(f'For ID {self.individual}: {len(zero_data_days)}'
+                      f' days with no peaks removed, {len(days)} remain.')
+            else:
+                print('No days with zero peaks found.')
 
         return df_cob, df_agg_by_day
 
@@ -522,41 +572,3 @@ class Cob:
         plt.show()
 
 
-# def test_cob_missing():
-#     id = 897741
-#     cob = Cob()
-#     cob.read_interim_data(file_name='15min_iob_cob_bg',
-# file_type='csv',
-# sampling_rate=1)
-#     cob.set_parameters(15,5)
-#     cob.get_person_data(id)
-#     print('\nPre-interpolation summary:')
-#     cob.summarise_missing()
-#     cob._interpolate_data()
-#     print('\nPost interpolation summary:')
-#     cob.summarise_missing()
-#     cob.identify_peaks()
-#     display(cob.individual_dataset.head())
-#     cob.individual_dataset =
-#           cob.remove_zero_peak_days(cob.individual_dataset,id)
-#     display(cob.individual_dataset[0].head())
-#     cob.plot_peaks()
-#     return cob
-# cob = test_cob_missing()
-
-# def test_cob_batch_processing():
-#     cob = Cob()
-#     cob.read_interim_data(file_name='15min_iob_cob_bg',
-# file_type='parquet',
-# sampling_rate=1)
-#     ids = cob.dataset.index.get_level_values('id').drop_duplicates().tolist()
-#     cob.pre_process_batch(ids)
-# cob_batch = test_cob_batch_processing()
-# cob_batch.head()
-
-# cob = Cob()
-# cob.read_processed_data()
-# c = cob.processed_dataset
-# peaks = c[c['peak'] == 1].index.get_level_values('datetime').hour
-# peak_counts = pd.Series(peaks).value_counts()
-# print(peak_counts)

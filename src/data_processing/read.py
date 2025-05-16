@@ -93,11 +93,6 @@ def read_flat_device_status_df_from_file(file: Path, config: Configuration):
 
 # reads all BG files from each zip files without extracting the zip
 def read_all_bg(config: Configuration):
-    # read_records = read_all(config, read_bg_from_zip)
-    #
-    # # read android data
-    # results = read_all_android_aps_files(config)
-    # return read_records + results
     return read_all(config, read_bg_from_zip)
 
 
@@ -191,7 +186,6 @@ def read_entries_file_into_df(archive, file, read_record, config):
             df[['time']] = parse_date_columns(df[['time']])
             read_record.add(df)
         except ValueError:  # A few files have headers that need cleansing first
-
             try:
                 df = (pd.read_csv(TextIOWrapper(bg_file, encoding="utf-8"),
                                   header=0,
@@ -203,6 +197,10 @@ def read_entries_file_into_df(archive, file, read_record, config):
                                   }).
                       rename(columns={'dateString': 'time', 'sgv': 'bg'}))
                 df[['time']] = parse_date_columns(df[['time']])
+                if config.localise_timezone:
+                    df[['time']] = df[['time']].dt.tz_localize(None)
+                else:
+                    df[['time']] = df[['time']].dt.tz_convert('UTC')
                 read_record.add(df)
             except Exception:
                 print(f'ID {read_record.zip_id}: Could not read file: {file}')
@@ -263,7 +261,10 @@ def parse_standard_date(date_str):
     for fmt in formats:
         try:
             new_dt = datetime.strptime(date_str, fmt)
-            new_dt = new_dt.replace(tzinfo=None)
+            if Configuration().localise_timezone:
+                new_dt = new_dt.replace(tzinfo=None)
+            else:
+                new_dt = new_dt.replace(tzinfo=datetime.timezone.utc)
             return new_dt
         except ValueError:
             logging.info(f'Could not parse date {date_str}: {date_str}')
@@ -341,13 +342,8 @@ def parse_date_columns(df_time_cols: Union[pd.Series, pd.DataFrame]) \
         -> pd.DataFrame:
     """
     Takes in a dataframe of date columns and returns parsed columns
-    Parameters
-    ----------
-    df_time_cols
-
-    Returns
-    -------
-    parsed_cols: pd.DataFrame of parsed columns
+    :param df_time_cols: pd.Series or pd.DataFrame
+    :return parsed_cols: pd.DataFrame of parsed columns
     """
     # Only attempts one format, parse_date_string will attempt others
     dt_format = '%Y-%m-%d %H:%M:%S%z'
@@ -389,7 +385,10 @@ def read_device_status_file_and_convert_date(actual_headers,
 
     for col in time_cols:  # Remove localisation from timestamps
         try:
-            df[col] = df[col].dt.tz_localize(None)
+            if config.localise_timezone:
+                df[col] = df[col].dt.tz_localize(None)
+            else:
+                df[col] = df[col].dt.tz_convert('UTC')
         except Exception as e:
             raise e
 
@@ -414,7 +413,7 @@ def is_a_device_status_csv_file(config, patient_id, file_path):
     startswith = Path(file_path).name.startswith(start_string)
 
     # has right file ending
-    endswith = file_path.endswith(config.device_status_csv_file_extension)
+    endswith = file_path.endswith(config.csv_extension)
     return startswith and endswith
 
 

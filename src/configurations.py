@@ -152,9 +152,11 @@ class Configuration:
     # READ CONFIGURATIONS
     data_dir: str = config['openAPS_data_path']
     as_flat_file = config['flat_file']
-    utc_conversion = config['utc_conversion']
+    localise_timezone = config['localise_timezone']
     data_folder = INTERIM_DATA_DIR
     perid_data_folder = data_folder / 'perid'
+    csv_extension = '.csv'
+    parquet_extension = '.parquet'
 
     # bg files
     bg_csv_file_extension = '.json.csv'
@@ -167,7 +169,6 @@ class Configuration:
 
     # device status files
     device_status_csv_file_start = '_devicestatus'
-    device_status_csv_file_extension = '.csv'
     device_status_col_type = {
         'id': str,
         'created_at': str,
@@ -202,16 +203,20 @@ class Configuration:
         'openaps/iob/netbasalinsulin': pd.Float32Dtype(),
         'openaps/iob/activity': str,
     }
-    flat_device_status_csv_file_name = 'device_status_tz_naive_df.csv'
-    flat_device_status_parquet_file_name = 'device_status_tz_naive_df.parquet'
+    device_status_prefix = 'device_status_'
+    tz_suffix = '_tz_naive' if localise_timezone else '_tz_aware'
+    device_file_prefix = device_status_prefix + tz_suffix
+    flat_device_status_csv_file_name = device_file_prefix + csv_extension
+    flat_device_status_parquet_file_name = (device_file_prefix +
+                                            parquet_extension)
     flat_device_status_csv_file = (
             data_folder / flat_device_status_csv_file_name)
     flat_device_status_parquet_file = (
             data_folder / flat_device_status_parquet_file_name)
-    dedub_flat_device_status_csv_file_name = \
-        'device_status_tz_naive_df_dedubed.csv'
-    dedub_flat_device_status_parquet_file_name = \
-        'device_status_tz_naive_df_dedubed.parquet'
+    dedub_flat_device_status_csv_file_name = (
+            device_file_prefix + 'deduped' + csv_extension)
+    dedub_flat_device_status_parquet_file_name = (
+            device_file_prefix + 'deduped' + parquet_extension)
     dedub_flat_device_status_csv_file = (
             data_folder / dedub_flat_device_status_csv_file_name)
     dedub_flat_device_status_parquet_file = (

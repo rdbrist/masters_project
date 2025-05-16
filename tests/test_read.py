@@ -242,7 +242,7 @@ def test_read_all_device_status(input_file):
     config = Configuration()  # Ensure this is properly initialized for the test
     config.data_dir = str(input_file.parent)  # Set the data directory
     config.device_status_csv_file_start = ""  # Adjust based on your file naming convention
-    config.device_status_csv_file_extension = ".csv"  # Adjust based on your file extension
+    config.csv_extension = ".csv"  # Adjust based on your file extension
 
     # Call the function
     records = read_all_device_status(config)
@@ -283,3 +283,94 @@ def test_read_device_status_file_into_df(input_file):
     assert not read_record.df.empty, "DataFrame should not be empty"
     assert "created_at" in read_record.df.columns, "DataFrame should contain 'created_at' column"
     assert pd.api.types.is_datetime64_any_dtype(read_record.df["created_at"]), "'created_at' column should be datetime"
+
+    @pytest.fixture
+    def mock_device_status_file():
+        # Mock CSV content
+        csv_content = """created_at,pump/clock
+    2023-10-01 12:00:00+0200,2023-10-01 12:00:00+0200
+    2023-10-01T12:00:00Z,2023-10-01T12:00:00Z
+    """
+        return StringIO(csv_content)
+
+    @pytest.fixture
+    def mock_config():
+        return TestConfiguration()
+
+    def test_read_device_status_file_into_df_localise_timezone(
+            mock_device_status_file, mock_config):
+        # Test with localise_timezone=True
+        mock_config.localise_timezone = True
+        df = read_device_status_file_into_df(mock_device_status_file,
+                                             mock_config)
+        assert df["created_at"].iloc[0] == datetime(2023, 10, 1, 12, 0, 0)
+        assert df["pump/clock"].iloc[1] == datetime(2023, 10, 1, 12, 0, 0)
+
+        # Test with localise_timezone=False
+        mock_device_status_file.seek(0)  # Reset file pointer
+        mock_config.localise_timezone = False
+        df = read_device_status_file_into_df(mock_device_status_file,
+                                             mock_config)
+        assert df["created_at"].iloc[0] == datetime(2023, 10, 1, 10, 0, 0)
+        assert df["pump/clock"].iloc[1] == datetime(2023, 10, 1, 12, 0, 0)
+
+    def test_parse_date_columns_localise_timezone(mock_config):
+        # Mock DataFrame with datetime columns
+        data = {
+            "created_at": ["2023-10-01 12:00:00+0200", "2023-10-01T12:00:00Z"],
+            "pump/clock": ["2023-10-01 12:00:00+0200", "2023-10-01T12:00:00Z"]
+        }
+        df = pd.DataFrame(data)
+
+        # Test with localise_timezone=True
+        mock_config.localise_timezone = True
+        parsed_df = parse_date_columns(df)
+        assert parsed_df["created_at"].iloc[0] == datetime(2023, 10, 1, 12, 0,
+                                                           0)
+        assert parsed_df["pump/clock"].iloc[1] == datetime(2023, 10, 1, 12, 0,
+                                                           0)
+
+        # Test with localise_timezone=False
+        mock_config.localise_timezone = False
+        parsed_df = parse_date_columns(df)
+        assert parsed_df["created_at"].iloc[0] == datetime(2023, 10, 1, 10, 0,
+                                                           0)
+        assert parsed_df["pump/clock"].iloc[1] == datetime(2023, 10, 1, 12, 0,
+                                                           0)
+
+        @pytest.mark.parametrize(
+            "localise_timezone, input_date, expected_output", [
+                # Test cases for localise_timezone=True (timezones removed)
+                (True, "2023-10-01 12:00:00+0200",
+                 datetime(2023, 10, 1, 12, 0, 0)),
+                (True, "2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0)),
+                (True, "2023-10-01T12:00:00+0200",
+                 datetime(2023, 10, 1, 12, 0, 0)),
+
+                # Test cases for localise_timezone=False (timezones converted to UTC)
+                (False, "2023-10-01 12:00:00+0200",
+                 datetime(2023, 10, 1, 10, 0, 0)),
+                (
+                False, "2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0)),
+                (False, "2023-10-01T12:00:00+0200",
+                 datetime(2023, 10, 1, 10, 0, 0)),
+            ])
+        def test_localise_timezone_flag(localise_timezone, input_date,
+                                        expected_output):
+            # Setup configuration
+            config = Configuration()
+            config.localise_timezone = localise_timezone
+
+            # Mock the Configuration class to return the desired flag
+            def mock_localise_timezone():
+                return config.localise_timezone
+
+            # Replace the Configuration method with the mock
+            Configuration.localise_timezone = property(
+                mock_localise_timezone)
+
+            # Call the function
+            result = parse_standard_date(input_date)
+
+            # Assert the result matches the expected output
+            assert result == expected_output
