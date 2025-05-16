@@ -13,8 +13,6 @@ from src.data_processing.resampling import ResampleDataFrame
 from src.config import INTERIM_DATA_DIR
 
 def resample_irregular_flat_file(flat_file_path, output_folder):
-    config = Configuration()
-    irregular = Irregular()
     daily = Daily()
     hourly = Hourly()
     fifteen_minute = FifteenMinute()

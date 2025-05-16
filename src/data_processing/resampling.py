@@ -33,7 +33,7 @@ class ResampleDataFrame:
             """Round specified columns to 3 decimal places."""
             for col in columns:
                 if col in df:
-                    df[col] = df[col].apply(self.__round_numbers)
+                    df.loc[:, col] = df[col].apply(self.__round_numbers)
             return df
 
         # resample by value column to avoid resampling over missing values in
@@ -168,11 +168,15 @@ class ResampleDataFrame:
 
         # add missing columns
         missing_columns = list(set(columns) - set(resulting_df.columns))
-        resulting_df[missing_columns] = None
+        resulting_df.loc[:, missing_columns] = None
 
         # replace na with 0 for count columns
         count_columns = self.__config.resampling_count_columns()
-        resulting_df[count_columns] = resulting_df[count_columns].fillna(0)
+        resulting_df.loc[:, count_columns] = \
+            (resulting_df[count_columns].
+             apply(pd.to_numeric, errors='coerce').
+             fillna(0).
+             astype(int))
 
         # reorder columns
         return resulting_df.loc[:, columns]
@@ -181,4 +185,5 @@ class ResampleDataFrame:
     def __round_numbers(x):
         if np.isnan(x):
             return x
-        return float(Decimal(str(x)).quantize(Decimal('.100'), rounding=ROUND_HALF_UP))
+        return float(Decimal(str(x)).quantize(Decimal('.100'),
+                                              rounding=ROUND_HALF_UP))
