@@ -109,7 +109,7 @@ class Hourly(Resampling):
 class FifteenMinute(Resampling):
     max_gap_in_min = 15
     # there needs to be a reading at least every 15min for the data points to
-    # be resampled for that hour
+    # be resampled for that period
     sample_rule = '15min'
     needs_max_gap_checking = False
     description = 'FifteenMinute'
@@ -123,7 +123,7 @@ class FifteenMinute(Resampling):
 class FiveMinute(Resampling):
     max_gap_in_min = 5
     # there needs to be a reading at least every 5 min for the data points to
-    # be resampled for that hour
+    # be resampled for that period
     sample_rule = '5min'
     needs_max_gap_checking = False
     description = 'FiveMinute'

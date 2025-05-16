@@ -22,7 +22,7 @@ class ResampleDataFrame:
         :param sampling : Resampling: What the time series needs to be resampled
         to
         """
-        GenCols = GeneralisedCols
+        gencols = GeneralisedCols
 
         cols_to_resample = self.__config.value_columns_to_resample()
         columns = (self.__config.info_columns() +
@@ -52,8 +52,8 @@ class ResampleDataFrame:
             # interval is smaller than the max allowed gap
             if sampling.needs_max_gap_checking and sampling.sample_rule == '1D':
                 # only one day of data
-                if len(set(sub_df[GenCols.datetime].dt.date)) == 1:
-                    result = (sub_df[GenCols.datetime].
+                if len(set(sub_df[gencols.datetime].dt.date)) == 1:
+                    result = (sub_df[gencols.datetime].
                               diff().
                               astype('timedelta64[s]') /
                               pd.Timedelta(seconds=60))
@@ -61,9 +61,9 @@ class ResampleDataFrame:
                     result = (
                         sub_df.
                         groupby(
-                            by=sub_df[GenCols.datetime].
+                            by=sub_df[gencols.datetime].
                             dt.date, group_keys=True).
-                        apply(lambda x: x[GenCols.datetime].
+                        apply(lambda x: x[gencols.datetime].
                               diff().
                               astype('timedelta64[s]') /
                                     pd.Timedelta(seconds=60))
@@ -72,9 +72,9 @@ class ResampleDataFrame:
                 # days with bigger gaps than max
                 bigger_gaps_dates = set(
                     sub_df.loc[sub_df['diff'] > sampling.max_gap_in_min]
-                    [GenCols.datetime].dt.date)
+                    [gencols.datetime].dt.date)
                 df_right_max_gaps = (
-                    sub_df[~sub_df[GenCols.datetime].
+                    sub_df[~sub_df[gencols.datetime].
                         dt.date.isin(bigger_gaps_dates)]
                 )
 
@@ -84,12 +84,12 @@ class ResampleDataFrame:
                 # than 180
                 last_datetime = list(
                     df_right_max_gaps.
-                    groupby(df_right_max_gaps[GenCols.datetime].dt.date).
-                    last()[GenCols.datetime])
+                    groupby(df_right_max_gaps[gencols.datetime].dt.date).
+                    last()[gencols.datetime])
                 first_datetime = list(
                     df_right_max_gaps.
-                    groupby(df_right_max_gaps[GenCols.datetime].dt.date).
-                    first()[GenCols.datetime])
+                    groupby(df_right_max_gaps[gencols.datetime].dt.date).
+                    first()[gencols.datetime])
                 latest_time_each_date = \
                     [t.replace(hour=23, minute=59, second=59)
                      for t in last_datetime]
@@ -117,7 +117,7 @@ class ResampleDataFrame:
                 # only keep dates that don't have a last time stamp that's
                 # more than max interval to midnight away
                 df_right_max_gaps = df_right_max_gaps[
-                    ~df_right_max_gaps[GenCols.datetime].dt.date.
+                    ~df_right_max_gaps[gencols.datetime].dt.date.
                     isin(set(last_or_first_time_interval_too_big))]
 
                 sub_df = df_right_max_gaps.drop(['diff'], axis=1)
@@ -126,7 +126,7 @@ class ResampleDataFrame:
                 raise NotImplementedError
 
             # resample
-            sub_df = sub_df.set_index([GenCols.datetime])
+            sub_df = sub_df.set_index([gencols.datetime])
             agg_dict = dict(sampling.general_agg_cols_dictionary)
             agg_dict[column] = sampling.agg_cols
             resampled_df = sub_df.resample(sampling.sample_rule).agg(agg_dict)
@@ -160,10 +160,10 @@ class ResampleDataFrame:
 
         # round numbers to 3 decimal places
         resulting_df = round_columns(resulting_df, [
-            GenCols.mean_iob, GenCols.mean_cob, GenCols.mean_bg,
-            GenCols.max_iob, GenCols.max_cob, GenCols.max_bg,
-            GenCols.min_iob, GenCols.min_cob, GenCols.min_bg,
-            GenCols.std_iob, GenCols.std_cob, GenCols.std_bg
+            gencols.mean_iob, gencols.mean_cob, gencols.mean_bg,
+            gencols.max_iob, gencols.max_cob, gencols.max_bg,
+            gencols.min_iob, gencols.min_cob, gencols.min_bg,
+            gencols.std_iob, gencols.std_cob, gencols.std_bg
         ])
 
         # add missing columns
