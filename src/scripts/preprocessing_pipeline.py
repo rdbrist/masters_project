@@ -22,12 +22,12 @@ def main():
     result = read_all_device_status(config)
     write_read_record(result,
                       as_flat_file,
-                      RAW_DATA_DIR,
+                      INTERIM_DATA_DIR,
                       config.flat_device_status_csv_file_name,
                       file_type='csv')
     write_read_record(result,
                       as_flat_file,
-                      RAW_DATA_DIR,
+                      INTERIM_DATA_DIR,
                       config.flat_device_status_parquet_file_name,
                       file_type='parquet')
     print(f'Completed writing device status flat file in '

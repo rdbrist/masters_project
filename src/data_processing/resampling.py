@@ -16,6 +16,7 @@ class ResampleDataFrame:
         """
         self.__df = irregular_df.sort_values(by=GeneralisedCols.datetime)
         self.__config = Configuration()
+        self.zip_id = self.__df['id'].iloc[0]
 
     def resample_to(self, sampling: Resampling):
         """
@@ -33,7 +34,11 @@ class ResampleDataFrame:
             """Round specified columns to 3 decimal places."""
             for col in columns:
                 if col in df:
-                    df.loc[:, col] = df[col].apply(self.__round_numbers)
+                    try:
+                        df.loc[:, col] = df[col].apply(self.__round_numbers)
+                    except FutureWarning as e:
+                        print(f'Error occurred for person {self.zip_id} in column {col}:\n'
+                              f'{e}')
             return df
 
         # resample by value column to avoid resampling over missing values in

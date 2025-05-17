@@ -6,7 +6,7 @@ from io import TextIOWrapper
 from pathlib import Path
 import logging
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Union
 
 from src.configurations import Configuration, GeneralisedCols, OpenAPSConfigs
@@ -207,10 +207,11 @@ def read_entries_file_into_df(archive, file, read_record, config):
                 if config.localise_timezone:
                     df[['time']] = df[['time']].dt.tz_localize(None)
                 else:
-                    df[['time']] = df[['time']].dt.tz_convert('UTC')
+                    df[['time']] = df[['time']].apply(to_utc)
                 read_record.add(df)
-            except Exception:
+            except Exception as e:
                 print(f'ID {read_record.zip_id}: Could not read file: {file}')
+                print(e)
 
 
 # reads device status file into df and adds it to read_record
@@ -265,13 +266,14 @@ def parse_standard_date(date_str):
         '%Y-%m-%dT%H:%M:%S.%f%z',
         '%a %b %d %H:%M:%S %Z %Y'
     ]
+
     for fmt in formats:
         try:
             new_dt = datetime.strptime(date_str, fmt)
             if Configuration().localise_timezone:
                 new_dt = new_dt.replace(tzinfo=None)
             else:
-                new_dt = new_dt.replace(tzinfo=datetime.timezone.utc)
+                new_dt = to_utc(new_dt)
             return new_dt
         except ValueError:
             logging.info(f'Could not parse date {date_str}: {date_str}')
@@ -395,7 +397,7 @@ def read_device_status_file_and_convert_date(actual_headers,
             if config.localise_timezone:
                 df[col] = df[col].dt.tz_localize(None)
             else:
-                df[col] = df[col].dt.tz_convert('UTC')
+                df[col] = df[col].apply(to_utc)
         except Exception as e:
             raise e
 
@@ -430,3 +432,10 @@ def read_device_status_from_zip(file, config):
                          file,
                          is_a_device_status_csv_file,
                          read_device_status_file_into_df)
+
+def to_utc(dt: datetime) -> datetime:
+    # Convert naive datetime to UTC
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    else:
+        return dt.astimezone(timezone.utc)

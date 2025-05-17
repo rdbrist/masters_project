@@ -203,7 +203,7 @@ class Configuration:
         'openaps/iob/netbasalinsulin': pd.Float32Dtype(),
         'openaps/iob/activity': str,
     }
-    device_status_prefix = 'device_status_'
+    device_status_prefix = 'device_status_df'
     tz_suffix = '_tz_naive' if localise_timezone else '_tz_aware'
     device_file_prefix = device_status_prefix + tz_suffix
     flat_device_status_csv_file_name = device_file_prefix + csv_extension
@@ -214,9 +214,9 @@ class Configuration:
     flat_device_status_parquet_file = (
             data_folder / flat_device_status_parquet_file_name)
     dedup_flat_device_status_csv_file_name = (
-            device_file_prefix + 'deduped' + csv_extension)
+            device_file_prefix + '_deduped' + csv_extension)
     dedup_flat_device_status_parquet_file_name = (
-            device_file_prefix + 'deduped' + parquet_extension)
+            device_file_prefix + '_deduped' + parquet_extension)
     dedup_flat_device_status_csv_file = (
             data_folder / dedup_flat_device_status_csv_file_name)
     dedup_flat_device_status_parquet_file = (

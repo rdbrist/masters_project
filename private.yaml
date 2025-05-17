@@ -11,4 +11,4 @@ flat_file  : TRUE
 
 # This property sets whether the time should be converted to UTC by applying the time zone offset (TRUE), or
 # to remove the timecode such that the time stamps are not shifted, but instead represent their local time.
-localise_timezone : TRUE
+localise_timezone : FALSE
