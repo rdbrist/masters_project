@@ -152,7 +152,7 @@ class Configuration:
     # READ CONFIGURATIONS
     data_dir = str(RAW_DATA_DIR)
     as_flat_file = config['flat_file']
-    localise_timezone = config['localise_timezone']
+    treat_timezone = config['treat_timezone']
     perid_data_folder = INTERIM_DATA_DIR / 'perid'
     csv_extension = '.csv'
     parquet_extension = '.parquet'
@@ -203,12 +203,12 @@ class Configuration:
         'openaps/iob/activity': str,
     }
 
-    # Profile files
-
     # Output filename definitions
     device_status_prefix = 'device_status_df'
-    tz_suffix = '_tz_naive' if localise_timezone else '_tz_aware'
+    tz_suffix_dict = {'keep': '_tz_aware', 'utc': '_tz_utc', 'localise': '_tz_naive'}
+    tz_suffix = tz_suffix_dict[treat_timezone]
     device_file_prefix = device_status_prefix + tz_suffix
+
     flat_device_status_csv_file_name = device_file_prefix + csv_extension
     flat_device_status_parquet_file_name = (device_file_prefix +
                                             parquet_extension)

@@ -6,6 +6,7 @@ from io import TextIOWrapper
 from pathlib import Path
 import logging
 import pandas as pd
+import re
 from datetime import datetime, timezone
 from typing import Union
 
@@ -206,9 +207,9 @@ def read_entries_file_into_df(archive, file, read_record, config):
                                   }).
                       rename(columns={'dateString': 'time', 'sgv': 'bg'}))
                 df[['time']] = parse_date_columns(df[['time']])
-                if config.localise_timezone:
+                if config.treat_timezone == 'localise':
                     df[['time']] = df[['time']].dt.tz_localize(None)
-                else:
+                elif config.treat_timezone == 'utc':
                     df[['time']] = df[['time']].apply(to_utc)
                 read_record.add(df)
             except Exception as e:
@@ -271,10 +272,12 @@ def parse_standard_date(date_str):
 
     for fmt in formats:
         try:
-            new_dt = datetime.strptime(date_str, fmt)
-            if Configuration().localise_timezone:
+            # Replace any z or Z as the datetime becomes naive of tz otherwise
+            date_str = re.sub(r'[Zz]$', '+00:00', date_str)
+            new_dt = pd.to_datetime(date_str, format=fmt, utc=False)
+            if Configuration().treat_timezone == 'localise':
                 new_dt = new_dt.replace(tzinfo=None)
-            else:
+            elif Configuration().treat_timezone == 'utc':
                 new_dt = to_utc(new_dt)
             return new_dt
         except ValueError:
@@ -357,7 +360,7 @@ def parse_date_columns(df_time_cols: Union[pd.Series, pd.DataFrame]) \
     :return parsed_cols: pd.DataFrame of parsed columns
     """
     # Only attempts one format, parse_date_string will attempt others
-    dt_format = '%Y-%m-%d %H:%M:%S%z'
+    dt_format = 'ISO8601'
 
     if isinstance(df_time_cols, pd.Series):
         parsed_cols = pd.Series()
@@ -394,11 +397,11 @@ def read_device_status_file_and_convert_date(actual_headers,
 
     df[time_cols] = parse_date_columns(df[time_cols])
 
-    for col in time_cols:  # Remove localisation from timestamps
+    for col in time_cols:  # Treat timezone
         try:
-            if config.localise_timezone:
+            if config.treat_timezone == 'localise':
                 df[col] = df[col].dt.tz_localize(None)
-            else:
+            elif config.treat_timezone == 'utc':
                 df[col] = df[col].apply(to_utc)
         except Exception as e:
             raise e
@@ -436,8 +439,11 @@ def read_device_status_from_zip(file, config):
                          read_device_status_file_into_df)
 
 def to_utc(dt: datetime) -> datetime:
-    # Convert naive datetime to UTC
+    # # Convert naive datetime to UTC
+    # if dt.tzinfo is None:
+    #     return dt.replace(tzinfo=timezone.utc)
+    # else:
+    #     return dt.astimezone(timezone.utc)
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
-    else:
-        return dt.astimezone(timezone.utc)
+    return dt.astimezone(timezone.utc)

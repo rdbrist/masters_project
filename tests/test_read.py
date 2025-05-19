@@ -22,7 +22,7 @@ from src.data_processing.read import (
     read_device_status_file_into_df,
     read_device_status_from_zip
 )
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 @pytest.fixture
 def input_file():
@@ -47,22 +47,52 @@ def test_parse_int_date(input_date, expected_output):
     else:
         assert result == expected_output
 
-@pytest.mark.parametrize("input_date, expected_output", [
-    ("2023-10-01 12:00:00", datetime(2023, 10, 1, 12, 0, 0)),  # '%Y-%m-%d %H:%M:%S'
-    ("2023-10-01 12:00:00+0200", datetime(2023, 10, 1, 12, 0, 0)),  # '%Y-%m-%d %H:%M:%S%z'
-    ("2023-10-01 12:00:00 +0200", datetime(2023, 10, 1, 12, 0, 0)),  # '%Y-%m-%d %H:%M:%S %z'
-    ("2023-10-01 12:00:00.123456+0200", datetime(2023, 10, 1, 12, 0, 0, 123456)),  # '%Y-%m-%d %H:%M:%S.%f%z'
-    ("2023-10-01T12:00:00.123456Z", datetime(2023, 10, 1, 12, 0, 0, 123456)),  # '%Y-%m-%dT%H:%M:%S.%fZ'
-    ("2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0)),  # '%Y-%m-%dT%H:%M:%SZ'
-    ("2023-10-01T12:00:00+0200", datetime(2023, 10, 1, 12, 0, 0)),  # '%Y-%m-%dT%H:%M:%S%z'
-    ("2023-10-01T12:00:00.123456+0200", datetime(2023, 10, 1, 12, 0, 0, 123456)),  # '%Y-%m-%dT%H:%M:%S.%f%z'
-    ("Sun Oct 01 12:00:00 UTC 2023", datetime(2023, 10, 1, 12, 0, 0)),  # '%a %b %d %H:%M:%S %Z %Y'
-    ("Invalid Date", None),  # Invalid format
+@pytest.mark.parametrize("treat_timezone,input_date,expected_output", [
+    # --- localise: remove tz info, keep local time (naive) ---
+    ('localise', "2023-10-01 12:00:00", datetime(2023, 10, 1, 12, 0, 0)),
+    ('localise', "2023-10-01 12:00:00+0200", datetime(2023, 10, 1, 12, 0, 0)),
+    ('localise', "2023-10-01 12:00:00 +0200", datetime(2023, 10, 1, 12, 0, 0)),
+    ('localise', "2023-10-01 12:00:00.123456+0200", datetime(2023, 10, 1, 12, 0, 0, 123456)),
+    ('localise', "2023-10-01T12:00:00.123456Z", datetime(2023, 10, 1, 12, 0, 0, 123456)),
+    ('localise', "2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0)),
+    ('localise', "2023-10-01T12:00:00+0200", datetime(2023, 10, 1, 12, 0, 0)),
+    ('localise', "2023-10-01T12:00:00.123456+0200", datetime(2023, 10, 1, 12, 0, 0, 123456)),
+    ('localise', "Sun Oct 01 12:00:00 UTC 2023", datetime(2023, 10, 1, 12, 0, 0)),
+    ('localise', "Invalid Date", None),
+
+    # --- keep: keep tz-aware datetime ---
+    ('keep', "2023-10-01 12:00:00", datetime(2023, 10, 1, 12, 0, 0)),
+    ('keep', "2023-10-01 12:00:00+0200", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone(timedelta(hours=2)))),
+    ('keep', "2023-10-01 12:00:00 +0200", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone(timedelta(hours=2)))),
+    ('keep', "2023-10-01 12:00:00.123456+0200", datetime(2023, 10, 1, 12, 0, 0, 123456, tzinfo=timezone(timedelta(hours=2)))),
+    ('keep', "2023-10-01T12:00:00.123456Z", datetime(2023, 10, 1, 12, 0, 0, 123456, tzinfo=timezone.utc)),
+    ('keep', "2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)),
+    ('keep', "2023-10-01T12:00:00+0200", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone(timedelta(hours=2)))),
+    ('keep', "2023-10-01T12:00:00.123456+0200", datetime(2023, 10, 1, 12, 0, 0, 123456, tzinfo=timezone(timedelta(hours=2)))),
+    ('keep', "Sun Oct 01 12:00:00 UTC 2023", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)),
+    ('keep', "Invalid Date", None),
+
+    # --- utc: convert to UTC ---
+    ('utc', "2023-10-01 12:00:00", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)),
+    ('utc', "2023-10-01 12:00:00+0200", datetime(2023, 10, 1, 10, 0, 0, tzinfo=timezone.utc)),
+    ('utc', "2023-10-01 12:00:00 +0200", datetime(2023, 10, 1, 10, 0, 0, tzinfo=timezone.utc)),
+    ('utc', "2023-10-01 12:00:00.123456+0200", datetime(2023, 10, 1, 10, 0, 0, 123456, tzinfo=timezone.utc)),
+    ('utc', "2023-10-01T12:00:00.123456Z", datetime(2023, 10, 1, 12, 0, 0, 123456, tzinfo=timezone.utc)),
+    ('utc', "2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)),
+    ('utc', "2023-10-01T12:00:00+0200", datetime(2023, 10, 1, 10, 0, 0, tzinfo=timezone.utc)),
+    ('utc', "2023-10-01T12:00:00.123456+0200", datetime(2023, 10, 1, 10, 0, 0, 123456, tzinfo=timezone.utc)),
+    ('utc', "Sun Oct 01 12:00:00 UTC 2023", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)),
+    ('utc', "Invalid Date", pd.NaT),
 ])
-def test_parse_standard_date(input_date, expected_output):
+def test_parse_standard_date_treat_timezone(treat_timezone, input_date, expected_output, monkeypatch):
+    # Patch the treat_timezone attribute for this test
+    monkeypatch.setattr(Configuration, "treat_timezone", treat_timezone)
     result = parse_standard_date(input_date)
-    if expected_output is None:
+    if expected_output is None or expected_output is pd.NaT:
         assert result is None or result is pd.NaT
+    elif getattr(expected_output, 'tzinfo', None):
+        # For tz-aware, check both value and tzinfo
+        assert result == expected_output and result.tzinfo == expected_output.tzinfo
     else:
         assert result == expected_output
 
@@ -297,24 +327,24 @@ def test_read_device_status_file_into_df(input_file):
     def mock_config():
         return TestConfiguration()
 
-    def test_read_device_status_file_into_df_localise_timezone(
+    def test_read_device_status_file_into_df_treat_timezone(
             mock_device_status_file, mock_config):
-        # Test with localise_timezone=True
-        mock_config.localise_timezone = True
+        # Test with treat_timezone='localise'
+        mock_config.treat_timezone = 'localise'
         df = read_device_status_file_into_df(mock_device_status_file,
                                              mock_config)
         assert df["created_at"].iloc[0] == datetime(2023, 10, 1, 12, 0, 0)
         assert df["pump/clock"].iloc[1] == datetime(2023, 10, 1, 12, 0, 0)
 
-        # Test with localise_timezone=False
+        # Test with treat_timezone='utc'
         mock_device_status_file.seek(0)  # Reset file pointer
-        mock_config.localise_timezone = False
+        mock_config.treat_timezone = 'utc'
         df = read_device_status_file_into_df(mock_device_status_file,
                                              mock_config)
         assert df["created_at"].iloc[0] == datetime(2023, 10, 1, 10, 0, 0)
         assert df["pump/clock"].iloc[1] == datetime(2023, 10, 1, 12, 0, 0)
 
-    def test_parse_date_columns_localise_timezone(mock_config):
+    def test_parse_date_columns_treat_timezone(mock_config):
         # Mock DataFrame with datetime columns
         data = {
             "created_at": ["2023-10-01 12:00:00+0200", "2023-10-01T12:00:00Z"],
@@ -322,16 +352,16 @@ def test_read_device_status_file_into_df(input_file):
         }
         df = pd.DataFrame(data)
 
-        # Test with localise_timezone=True
-        mock_config.localise_timezone = True
+        # Test with treat_timezone='localise'
+        mock_config.treat_timezone = 'localise'
         parsed_df = parse_date_columns(df)
         assert parsed_df["created_at"].iloc[0] == datetime(2023, 10, 1, 12, 0,
                                                            0)
         assert parsed_df["pump/clock"].iloc[1] == datetime(2023, 10, 1, 12, 0,
                                                            0)
 
-        # Test with localise_timezone=False
-        mock_config.localise_timezone = False
+        # Test with treat_timezone='utc'
+        mock_config.treat_timezone = 'utc'
         parsed_df = parse_date_columns(df)
         assert parsed_df["created_at"].iloc[0] == datetime(2023, 10, 1, 10, 0,
                                                            0)
@@ -339,35 +369,35 @@ def test_read_device_status_file_into_df(input_file):
                                                            0)
 
         @pytest.mark.parametrize(
-            "localise_timezone, input_date, expected_output", [
-                # Test cases for localise_timezone=True (timezones removed)
-                (True, "2023-10-01 12:00:00+0200",
+            "treat_timezone, input_date, expected_output", [
+                # Test cases for treat_timezone='localise' (timezones removed)
+                ('localise', "2023-10-01 12:00:00+0200",
                  datetime(2023, 10, 1, 12, 0, 0)),
-                (True, "2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0)),
-                (True, "2023-10-01T12:00:00+0200",
+                ('localise', "2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0)),
+                ('localise', "2023-10-01T12:00:00+0200",
                  datetime(2023, 10, 1, 12, 0, 0)),
 
-                # Test cases for localise_timezone=False (timezones converted to UTC)
-                (False, "2023-10-01 12:00:00+0200",
+                # Test cases for treat_timezone='utc' (timezones converted to UTC)
+                ('utc', "2023-10-01 12:00:00+0200",
                  datetime(2023, 10, 1, 10, 0, 0)),
                 (
-                False, "2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0)),
-                (False, "2023-10-01T12:00:00+0200",
+                'utc', "2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0)),
+                ('utc', "2023-10-01T12:00:00+0200",
                  datetime(2023, 10, 1, 10, 0, 0)),
             ])
-        def test_localise_timezone_flag(localise_timezone, input_date,
+        def test_treat_timezone_flag(treat_timezone, input_date,
                                         expected_output):
             # Setup configuration
             config = Configuration()
-            config.localise_timezone = localise_timezone
+            config.treat_timezone = treat_timezone
 
             # Mock the Configuration class to return the desired flag
-            def mock_localise_timezone():
-                return config.localise_timezone
+            def mock_treat_timezone():
+                return config.treat_timezone
 
             # Replace the Configuration method with the mock
-            Configuration.localise_timezone = property(
-                mock_localise_timezone)
+            Configuration.treat_timezone = property(
+                mock_treat_timezone)
 
             # Call the function
             result = parse_standard_date(input_date)
