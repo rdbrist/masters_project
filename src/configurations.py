@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from src.config import PROJ_ROOT, INTERIM_DATA_DIR
+from src.config import PROJ_ROOT, INTERIM_DATA_DIR, RAW_DATA_DIR
 
 import pandas as pd
 import yaml
@@ -150,11 +150,10 @@ class Daily(Resampling):
 class Configuration:
     config = load_private_yaml()
     # READ CONFIGURATIONS
-    data_dir: str = config['openAPS_data_path']
+    data_dir = str(RAW_DATA_DIR)
     as_flat_file = config['flat_file']
     localise_timezone = config['localise_timezone']
-    data_folder = INTERIM_DATA_DIR
-    perid_data_folder = data_folder / 'perid'
+    perid_data_folder = INTERIM_DATA_DIR / 'perid'
     csv_extension = '.csv'
     parquet_extension = '.parquet'
 
@@ -203,6 +202,10 @@ class Configuration:
         'openaps/iob/netbasalinsulin': pd.Float32Dtype(),
         'openaps/iob/activity': str,
     }
+
+    # Profile files
+
+    # Output filename definitions
     device_status_prefix = 'device_status_df'
     tz_suffix = '_tz_naive' if localise_timezone else '_tz_aware'
     device_file_prefix = device_status_prefix + tz_suffix
@@ -210,17 +213,17 @@ class Configuration:
     flat_device_status_parquet_file_name = (device_file_prefix +
                                             parquet_extension)
     flat_device_status_csv_file = (
-            data_folder / flat_device_status_csv_file_name)
+            INTERIM_DATA_DIR / flat_device_status_csv_file_name)
     flat_device_status_parquet_file = (
-            data_folder / flat_device_status_parquet_file_name)
+            INTERIM_DATA_DIR / flat_device_status_parquet_file_name)
     dedup_flat_device_status_csv_file_name = (
             device_file_prefix + '_deduped' + csv_extension)
     dedup_flat_device_status_parquet_file_name = (
             device_file_prefix + '_deduped' + parquet_extension)
     dedup_flat_device_status_csv_file = (
-            data_folder / dedup_flat_device_status_csv_file_name)
+            INTERIM_DATA_DIR / dedup_flat_device_status_csv_file_name)
     dedup_flat_device_status_parquet_file = (
-            data_folder / dedup_flat_device_status_parquet_file_name)
+            INTERIM_DATA_DIR / dedup_flat_device_status_parquet_file_name)
 
     # columns to keep
     # TODO use generalised cols instead

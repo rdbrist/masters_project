@@ -83,6 +83,8 @@ class ReadRecord:
         self.newest_date = str(self.df[time_col_name].max())
 
 
+
+
 # reads flat device data csv and does preprocessing
 # allows path for file to read
 def read_flat_device_status_df_from_file(file: Path, config: Configuration):

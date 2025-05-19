@@ -2,7 +2,7 @@ import pandas as pd
 
 from src.configurations import Configuration, GeneralisedCols, Resampling
 from src.helper import preprocessed_file_for, flat_preprocessed_file_for
-from src.data_processing.read import parse_date_columns
+from src.config import INTERIM_DATA_DIR
 
 
 class ReadPreprocessedDataFrame:
@@ -28,7 +28,7 @@ class ReadPreprocessedDataFrame:
             file = preprocessed_file_for(self.__config.perid_data_folder,
                                          self.__zip_id, self.__sampling)
         else:
-            file = flat_preprocessed_file_for(self.__config.data_folder,
+            file = flat_preprocessed_file_for(INTERIM_DATA_DIR,
                                               self.__sampling)
         try:
             df = pd.read_csv(file,

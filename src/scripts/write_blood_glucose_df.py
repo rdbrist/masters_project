@@ -3,6 +3,7 @@ from src.data_processing.read import read_all_bg
 from src.data_processing.write import write_read_record
 import time
 from datetime import timedelta
+from src.config import INTERIM_DATA_DIR
 
 
 # set as_flat_file to True if you want to save one big flat bg csv or set it
@@ -11,7 +12,7 @@ def main():
     start_time = time.time()
     config = Configuration()
     as_flat_file = config.as_flat_file
-    folder = config.data_folder if as_flat_file else config.perid_data_folder
+    folder = INTERIM_DATA_DIR if as_flat_file else config.perid_data_folder
     result = read_all_bg(config)
     write_read_record(result,
                       as_flat_file,
