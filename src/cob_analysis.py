@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+from sklearn.preprocessing import StandardScaler
 from loguru import logger
 
 from scipy.signal import find_peaks
@@ -15,7 +17,7 @@ class Cob:
     the raw dataset. The class provides methods for reading the consolidated
     data, exploratory data analysis, processing the data for finding peaks,
     producing peak features and analysis of those features. It assumes the data
-    is resampled at an particular interval, but not that the dataset is sparse
+    is resampled at a particular interval, but not that the dataset is sparse
     with regular intervals. The creation of a sparse set for peak extraction and
     plotting is done in the class itself.
     """
@@ -30,6 +32,12 @@ class Cob:
         self.processed_dataset = None
         self.sampling_rate = 15  # minutes, default
 
+    def dataset_is_loaded(self):
+        if self.dataset is None:
+            print("Dataset not loaded. Please run read_interim_data() first.")
+            return False
+        return True
+    
     def set_parameters(self, height: int, distance: int):
         """
         Set the parameters for the find_peaks function.
@@ -52,7 +60,7 @@ class Cob:
         :param sampling_rate: sampling rate in minutes, default is 15
         """
         try:
-            dtypes = {'system': 'category'}
+            dtypes = {'id': 'int', 'system': 'category'}
             if file_type == 'csv':
                 path = self.data_file_path / (file_name + '.csv')
                 self.dataset = (pd.read_csv(path,
@@ -105,7 +113,7 @@ class Cob:
     def _check_minute_factor(datetime_series: pd.Series,
                              interval_minutes: int) -> bool:
         """
-        Check the sampling rate is a factor for all the minute inteval values.
+        Check the sampling rate is a factor for all the minute interval values.
         :param datetime_series: A pandas Series of datetime objects.
         :param interval_minutes: The expected interval in minutes.
         :return: True if the interval matches a factor of the minutes values.
@@ -132,8 +140,7 @@ class Cob:
         if not isinstance(self.sampling_rate, int):
             print(f"Sampling rate {self.sampling_rate} is not an integer.")
             return False
-        if self.dataset is None:
-            print("Dataset is not loaded.")
+        if not self.dataset_is_loaded():
             return False
         for p_id in self.dataset.index.get_level_values('id').drop_duplicates():
             datetimes = (self.dataset.
@@ -183,7 +190,7 @@ class Cob:
             df['time'] = df.index.time
             df = df[['cob max', 'day', 'time']]
 
-        self.individual = p_id
+        self.individual = int(p_id)
         self.individual_dataset = df
 
         return df
@@ -226,7 +233,7 @@ class Cob:
                                               distance=distance)
         return peak_indices, properties
 
-    def identify_peaks(self, height: int = None,
+    def identify_peaks_for_individual(self, height: int = None,
                        distance: int = None,
                        suppress: bool = False):
         """
@@ -236,6 +243,7 @@ class Cob:
             provided, will use the stored value.
         :param distance: (int) Distance parameter for find_peaks function. If
             not provided, will use the stored value.
+        :param suppress: (bool) Suppress output messages if True
         """
 
         # Establish the dataframe to use
@@ -288,7 +296,8 @@ class Cob:
         date_rng = pd.date_range(start=min_date, end=max_date, freq=freq)
         return date_rng
 
-    def summarise_missing_for_individual(self, variable: str = 'cob max'):
+    def summarise_missing_for_individual(self, variable: str = 'cob max',
+                                         suppress: bool = False):
         """
         Summarise missing data in the individual dataset, including basic
         statistics and identifying date ranges with missing data.
@@ -310,25 +319,12 @@ class Cob:
         missing_samples = num_intervals - n
         total_missing = nans + missing_samples
         days_in_range = num_intervals / (24 * 60 / self.sampling_rate)
-        total_pc_missing = (total_missing / num_intervals)*100
+        missing_percent = (total_missing / num_intervals)*100
         days_with_data = (self.individual_dataset.
                           groupby('day').
                           agg({variable: 'sum'}).
                           reset_index())
         days_count = len(days_with_data)
-
-        print(f'MISSING DATA SUMMARY FOR {self.individual}')
-        print(f'Start of time series: {min_date}')
-        print(f'End of time series: {max_date}')
-        print(f'Samples: {n}')
-        print(f'NaN values: {nans}')
-        print(f'15-minute intervals in range: {num_intervals}')
-        print(f'Missing samples: {missing_samples}')
-        print(f'Total missing (NaNs and missing): {total_missing}')
-        print(f'Days in range: {days_in_range:.2f}')
-        print(f'Total % missing: {total_pc_missing:.2f}')
-        print(f'Days with COB data: {days_count}')
-        print(f'Days with missing data: {days_in_range - days_count:.2f}')
 
         # Identify date ranges with missing data
         missing_data = self.individual_dataset[variable].isnull()
@@ -340,8 +336,21 @@ class Cob:
         # Convert from 15-minute intervals to days
         mean_gap_length = gap_lengths.mean() / 96
 
-        print(f'Number of gaps: {num_gaps}')
-        print(f'Mean length of gaps (in days): {mean_gap_length:.2f}\n')
+        if not suppress:
+            print(f'MISSING DATA SUMMARY FOR {self.individual}')
+            print(f'Start of time series: {min_date}')
+            print(f'End of time series: {max_date}')
+            print(f'Samples: {n}')
+            print(f'NaN values: {nans}')
+            print(f'15-minute intervals in range: {num_intervals}')
+            print(f'Missing samples: {missing_samples}')
+            print(f'Total missing (NaNs and missing): {total_missing}')
+            print(f'Days in range: {days_in_range:.2f}')
+            print(f'Total % missing: {missing_percent:.2f}')
+            print(f'Days with COB data: {days_count}')
+            print(f'Days with missing data: {days_in_range - days_count:.2f}')
+            print(f'Number of gaps: {num_gaps}')
+            print(f'Mean length of gaps (in days): {mean_gap_length:.2f}\n')
         
         stats = {
             'n': n,
@@ -352,7 +361,7 @@ class Cob:
             'missing_samples': missing_samples,
             'total_missing': total_missing,
             'days_in_range': days_in_range,
-            'total_pc_missing': total_pc_missing,
+            'missing_percent': missing_percent,
             'days_with_data': days_count,
             'days_with_missing_data': days_in_range - days_count,
             'num_gaps': num_gaps,
@@ -363,20 +372,57 @@ class Cob:
     def summarise_missing_for_dataset(self):
         """
         Summarise missing data across the whole dataset, including basic
-        statistics and identifying date ranges with missing data.
+        statistics and identifying date ranges with missing data. Also
+        processes the data to interpolate and produce peaks to provide this
+        overview.
         :return: DataFrame: DataFrame containing missing data summary for each
         """
-        if self.dataset is None:
-            print("No dataset available. Please run read_interim_data() first.")
+        if not self.dataset_is_loaded():
             return
 
-        missing_df = pd.DataFrame()
-        for p_id in self.dataset.index.get_level_values('id').drop_duplicates():
-            individual_df = self.get_person_data(p_id)
-            individual_df['id'] = p_id
-            missing_df = pd.concat([missing_df, individual_df])
+        if self.processed_dataset is None:
+            print('Wanting to summarise the peak data but this is not yet '
+                  'processed. Please run pre_process_batch() first without '
+                  'specifying a dataset. This will process all by default.')
+            return
 
-        return missing_df
+        summary_df = pd.DataFrame()
+
+        for p_id in self.dataset.index.get_level_values('id').drop_duplicates():
+            self.get_person_data(p_id)
+            summary_dict = self.summarise_missing_for_individual(suppress=True)
+            individual_df = pd.DataFrame.from_dict(summary_dict, orient='index').T
+            individual_df['id'] = int(p_id)
+            summary_df = pd.concat([summary_df, individual_df])
+
+        # Calculate number of peaks per day for each individual
+        daily_peaks = (self.processed_dataset
+                       .groupby(['id', 'day'])['peak']
+                       .sum()
+                       .reset_index())
+
+        # Aggregate per individual: total peaks, average peaks per day, number of days
+        df_peaks = (daily_peaks
+                    .groupby('id')
+                    .agg(num_peaks=('peak', 'sum'),
+                         average_peaks=('peak', 'mean'),
+                         num_days=('day', 'nunique')))
+        df_peaks.index = df_peaks.index.astype(int)
+
+        summary_df = summary_df.set_index('id').join(df_peaks)
+        date_cols = ['min_date', 'max_date']
+        numeric_cols = summary_df.columns.difference(date_cols)
+        summary_df[numeric_cols] = (summary_df[numeric_cols].
+                                    apply(pd.to_numeric,errors='coerce').
+                                    fillna(0))
+
+        fig, ax = plt.subplots(figsize=(8, 4))
+        sns.histplot(summary_df['missing_percent'], ax=ax, binwidth=10)
+        ax.set_title('Percentage of Missing Values')
+        ax.set_xlabel('Percentage of Values Missing for Individual')
+        plt.show()
+
+        return summary_df
 
     def plot_peaks(self,
                    title: str = 'COB Peaks',
@@ -398,7 +444,7 @@ class Cob:
             print(f'Variable {variable} not found in DataFrame.')
             return
         if df['peak'].isnull().all():
-            print("No peaks identified. Please run identify_peaks() first.")
+            print("No peaks identified. Please run identify_peaks_for_individual() first.")
             return
         fig, ax = plt.subplots(figsize=(16, 4))
         sns.lineplot(df[variable], ax=ax)
@@ -431,12 +477,11 @@ class Cob:
                    index.get_level_values('id').
                    drop_duplicates().
                    tolist())
-        if self.dataset is None:
-            print('No dataset available. Please load data first.')
+        if not self.dataset_is_loaded():
             return
         if ids is None:
             ids = all_ids
-            print(f'No IDs provided. Processing all {len(ids)} records by default.')
+            print(f'No IDs provided. Processing all {len(ids)} records.')
 
         df_all = pd.DataFrame()
         self.individual_dataset = None
@@ -449,12 +494,13 @@ class Cob:
                 raise ValueError(f'Individual {p_id} not found in dataset')
             self.individual_dataset = self.get_person_data(p_id)
             self.individual_dataset = self._interpolate_data()
-            self.individual_dataset = self.identify_peaks(height=height,
-                                                          distance=distance,
-                                                          suppress=suppress)
+            self.individual_dataset = (
+                self.identify_peaks_for_individual(height=height,
+                                                   distance=distance,
+                                                   suppress=suppress))
             self.individual_dataset, _ = (
                 self.remove_zero_peak_days(suppress=suppress))
-            self.individual_dataset['id'] = p_id
+            self.individual_dataset['id'] = int(p_id)
             self.individual_dataset = (self.individual_dataset.
                                        reset_index(names='datetime').
                                        set_index(['id', 'datetime']))
@@ -556,19 +602,102 @@ class Cob:
 
         return df
 
-    def plot_cob_by_hour(self):
-        """
-        Plots the number of peaks by hour of the day for the processed dataset.
-        """
-        c = self.processed_dataset
-        peaks = c[c['peak'] == 1].index.get_level_values('datetime').hour
-        peak_counts = pd.Series(peaks).value_counts()
-        peak_counts = peak_counts.sort_index()
-        peak_counts.plot(kind='bar')
-        plt.xlabel("Hour of Day")
-        plt.ylabel("Number of Peaks")
-        plt.title("Peak Counts by Hour")
-        plt.xticks(range(peak_counts.index.min(), peak_counts.index.max() + 1))
-        plt.show()
+def _return_peaks(df):
+    pass
 
+def plot_by_hour_individuals(df):
+    """
+    Plots a histogram of peaks for separate individuals for comparison, in a
+    facetgrid.
+    :param df: Dataframe with datetime and id as index, and peak column with 1
+    in to represent a peak
+    :return:
+    """
+    df_reset = df.reset_index()
+    df_reset['hour'] = df_reset['datetime'].dt.hour
+    df_peaks = df_reset[df_reset['peak'] == 1]
+
+    # FacetGrid by 'id'
+    g = sns.FacetGrid(df_peaks, col='id', col_wrap=4, sharex=True, sharey=True)
+    g.map_dataframe(sns.histplot, x='hour', bins=range(0, 25), discrete=True)
+    g.set_axis_labels('Hour', 'Peak Count')
+    g.set_titles('ID {col_name}')
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_cob_by_hour(df):
+    """
+    Plots the number of peaks by hour of the day for a processed dataset.
+    """
+    peaks = df[df['peak'] == 1].index.get_level_values('datetime').hour
+    peak_counts = pd.Series(peaks).value_counts()
+    peak_counts = peak_counts.sort_index()
+    peak_counts.plot(kind='bar')
+    plt.xlabel("Hour of Day")
+    plt.ylabel("Number of Peaks")
+    plt.title("Peak Counts by Hour")
+    plt.xticks(range(peak_counts.index.min(), peak_counts.index.max() + 1))
+    plt.show()
+
+
+def hierarchical_clustering(summary_df: pd.DataFrame, feature_cols: list = None) -> pd.DataFrame:
+    """
+    Perform hierarchical clustering on the summary DataFrame.
+    :param summary_df: (pd.DataFrame) DataFrame containing summary statistics 
+    with 'id' as index.
+    :param features: (list) List of features to use for clustering. If None,
+    :return None: Displays a dendrogram of the hierarchical clustering.
+    """
+
+    # Ensure the DataFrame is indexed by 'id'
+    if summary_df.index.name != 'id':
+        raise ValueError("The DataFrame must contain an 'id' column.")
+
+
+    if feature_cols is None:
+        feature_cols = ['days_with_data', 'num_peaks', 'missing_percent']
+    # Select features and invert missing_percent for clustering
+    features = summary_df[
+        feature_cols].copy()
+    invert_cols = ['missing_percent', 'total_missing']
+    for col in invert_cols:
+        if col in features.columns:
+            features[col] = -features[col]  # Lower is better
+
+    # Standardize features
+    scaler = StandardScaler()
+    x_scaled = scaler.fit_transform(features)
+
+    # Hierarchical clustering
+    z = linkage(x_scaled, method='ward')
+
+    # Plot dendrogram
+    plt.figure(figsize=(8, 6))
+    dendrogram(z, labels=summary_df.index.astype(int).astype(str), leaf_rotation=90, truncate_mode='level', p=4)
+    plt.title('Hierarchical Clustering Dendrogram of Individuals')
+    plt.xlabel('Individual (zip_id)')
+    plt.ylabel('Distance')
+    plt.tight_layout()
+    plt.show()
+
+    # Assign clusters (after visual inspection of dendrogram)
+    clusters = fcluster(z, t=7, criterion='maxclust')
+    summary_df['cluster'] = clusters
+    features['cluster'] = clusters
+
+    # Print cluster sizes
+    cluster_sizes = summary_df['cluster'].value_counts()
+    print("\nCluster Sizes:")
+    for cluster, size in cluster_sizes.sort_values().items():
+        print(f"Cluster {cluster}: {size} individuals")
+
+    # Plot clusters in matrix plot for all features
+    plt.figure(figsize=(10, 8))
+    sns.pairplot(features, hue='cluster', palette='Set2', height=4, aspect=1)
+    plt.suptitle('Pairplot of Features by Cluster', y=1.02)
+    plt.show()
+
+
+    return summary_df
 
