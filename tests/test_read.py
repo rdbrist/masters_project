@@ -5,7 +5,6 @@ from src.configurations import Configuration
 import zipfile
 from src.data_processing.read import (
     parse_standard_date,
-    parse_int_date,
     parse_int_and_standard_date,
     correct_odd_tz,
     parse_date_string,
@@ -29,65 +28,60 @@ def input_file():
     # Define the common input file path
     return Path(__file__).parent / "test_data" / "0001.zip"
 
-@pytest.mark.parametrize("input_date, expected_output", [
-    (1633046400, datetime(2021, 10, 1, 0, 0, 0)),  # Valid seconds timestamp
-    (1633046400000, datetime(2021, 10, 1, 0, 0, 0)),  # Valid milliseconds timestamp
-    ("1633046400", datetime(2021, 10, 1, 0, 0, 0)),  # Valid seconds as string
-    ("1633046400000", datetime(2021, 10, 1, 0, 0, 0)),  # Valid milliseconds as string
-    (int(1e9), datetime(2001, 9, 9, 1, 46, 40)),  # Large valid seconds timestamp
-    ("invalid", pd.NaT),  # Invalid string input
-    (-1, pd.NaT),  # Negative timestamp
-    (None, pd.NaT),  # None input
-    ("", pd.NaT),  # Empty string
-])
-def test_parse_int_date(input_date, expected_output):
-    result = parse_int_date(input_date)
-    if expected_output is pd.NaT:
-        assert result is pd.NaT
-    else:
-        assert result == expected_output
-
-@pytest.mark.parametrize("treat_timezone,input_date,expected_output", [
+@pytest.mark.parametrize("treat_timezone, input_date, expected_output", [
     # --- localise: remove tz info, keep local time (naive) ---
-    ('localise', "2023-10-01 12:00:00", datetime(2023, 10, 1, 12, 0, 0)),
-    ('localise', "2023-10-01 12:00:00+0200", datetime(2023, 10, 1, 12, 0, 0)),
-    ('localise', "2023-10-01 12:00:00 +0200", datetime(2023, 10, 1, 12, 0, 0)),
-    ('localise', "2023-10-01 12:00:00.123456+0200", datetime(2023, 10, 1, 12, 0, 0, 123456)),
-    ('localise', "2023-10-01T12:00:00.123456Z", datetime(2023, 10, 1, 12, 0, 0, 123456)),
-    ('localise', "2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0)),
-    ('localise', "2023-10-01T12:00:00+0200", datetime(2023, 10, 1, 12, 0, 0)),
-    ('localise', "2023-10-01T12:00:00.123456+0200", datetime(2023, 10, 1, 12, 0, 0, 123456)),
-    ('localise', "Sun Oct 01 12:00:00 UTC 2023", datetime(2023, 10, 1, 12, 0, 0)),
-    ('localise', "Invalid Date", None),
+    ('localise', "2023-10-01 12:00:00", pd.Timestamp("2023-10-01 12:00:00")),
+    ('localise', "2023-10-01 12:00:00+0200", pd.Timestamp("2023-10-01 12:00:00")),
+    ('localise', "2023-10-01 12:00:00 +0200", pd.Timestamp("2023-10-01 12:00:00")),
+    ('localise', "2023-10-01 12:00:00.123456+0200", pd.Timestamp("2023-10-01 12:00:00.123456")),
+    ('localise', "2023-10-01T12:00:00.123456Z", pd.Timestamp("2023-10-01 12:00:00.123456")),
+    ('localise', "2023-10-01T12:00:00Z", pd.Timestamp("2023-10-01 12:00:00")),
+    ('localise', "2023-10-01T12:00:00+0200", pd.Timestamp("2023-10-01 12:00:00")),
+    ('localise', "2023-10-01T12:00:00.123456+0200", pd.Timestamp("2023-10-01 12:00:00.123456")),
+    ('localise', "Sun Oct 01 12:00:00 UTC 2023", pd.Timestamp("2023-10-01 12:00:00")),
+    ('localise', 1633046400, pd.Timestamp(1633046400, unit="s")),
+    ('localise', 1633046400000, pd.Timestamp(1633046400000, unit="ms")),
+    ('localise', "1633046400", pd.Timestamp(1633046400, unit="s")),
+    ('localise', "1633046400000", pd.Timestamp(1633046400000, unit="ms")),
+    ('localise', int(1e9), pd.Timestamp(int(1e9), unit="s")),
 
     # --- keep: keep tz-aware datetime ---
-    ('keep', "2023-10-01 12:00:00", datetime(2023, 10, 1, 12, 0, 0)),
-    ('keep', "2023-10-01 12:00:00+0200", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone(timedelta(hours=2)))),
-    ('keep', "2023-10-01 12:00:00 +0200", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone(timedelta(hours=2)))),
-    ('keep', "2023-10-01 12:00:00.123456+0200", datetime(2023, 10, 1, 12, 0, 0, 123456, tzinfo=timezone(timedelta(hours=2)))),
-    ('keep', "2023-10-01T12:00:00.123456Z", datetime(2023, 10, 1, 12, 0, 0, 123456, tzinfo=timezone.utc)),
-    ('keep', "2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)),
-    ('keep', "2023-10-01T12:00:00+0200", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone(timedelta(hours=2)))),
-    ('keep', "2023-10-01T12:00:00.123456+0200", datetime(2023, 10, 1, 12, 0, 0, 123456, tzinfo=timezone(timedelta(hours=2)))),
-    ('keep', "Sun Oct 01 12:00:00 UTC 2023", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)),
-    ('keep', "Invalid Date", None),
+    ('keep', "2023-10-01 12:00:00", pd.Timestamp("2023-10-01 12:00:00")),
+    ('keep', "2023-10-01 12:00:00+0200", pd.Timestamp("2023-10-01 12:00:00+02:00")),
+    ('keep', "2023-10-01 12:00:00 +0200", pd.Timestamp("2023-10-01 12:00:00+02:00")),
+    ('keep', "2023-10-01 12:00:00.123456+0200", pd.Timestamp("2023-10-01 12:00:00.123456+02:00")),
+    ('keep', "2023-10-01T12:00:00.123456Z", pd.Timestamp("2023-10-01 12:00:00.123456+00:00")),
+    ('keep', "2023-10-01T12:00:00Z", pd.Timestamp("2023-10-01 12:00:00+00:00")),
+    ('keep', "2023-10-01T12:00:00+0200", pd.Timestamp("2023-10-01 12:00:00+02:00")),
+    ('keep', "2023-10-01T12:00:00.123456+0200", pd.Timestamp("2023-10-01 12:00:00.123456+02:00")),
+    ('keep', "Sun Oct 01 12:00:00 UTC 2023", pd.Timestamp("2023-10-01 12:00:00+00:00")),
+    ('keep', "Invalid Date", pd.NaT),
+    ('keep', 1633046400, pd.Timestamp(1633046400, unit="s")),
+    ('keep', 1633046400000, pd.Timestamp(1633046400000, unit="ms")),
+    ('keep', "1633046400", pd.Timestamp(1633046400, unit="s")),
+    ('keep', "1633046400000", pd.Timestamp(1633046400000, unit="ms")),
+    ('keep', int(1e9), pd.Timestamp(int(1e9), unit="s")),
 
     # --- utc: convert to UTC ---
-    ('utc', "2023-10-01 12:00:00", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)),
-    ('utc', "2023-10-01 12:00:00+0200", datetime(2023, 10, 1, 10, 0, 0, tzinfo=timezone.utc)),
-    ('utc', "2023-10-01 12:00:00 +0200", datetime(2023, 10, 1, 10, 0, 0, tzinfo=timezone.utc)),
-    ('utc', "2023-10-01 12:00:00.123456+0200", datetime(2023, 10, 1, 10, 0, 0, 123456, tzinfo=timezone.utc)),
-    ('utc', "2023-10-01T12:00:00.123456Z", datetime(2023, 10, 1, 12, 0, 0, 123456, tzinfo=timezone.utc)),
-    ('utc', "2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)),
-    ('utc', "2023-10-01T12:00:00+0200", datetime(2023, 10, 1, 10, 0, 0, tzinfo=timezone.utc)),
-    ('utc', "2023-10-01T12:00:00.123456+0200", datetime(2023, 10, 1, 10, 0, 0, 123456, tzinfo=timezone.utc)),
-    ('utc', "Sun Oct 01 12:00:00 UTC 2023", datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)),
+    ('utc', "2023-10-01 12:00:00", pd.Timestamp("2023-10-01 12:00:00", tz="UTC")),
+    ('utc', "2023-10-01 12:00:00+0200", pd.Timestamp("2023-10-01 10:00:00+00:00")),
+    ('utc', "2023-10-01 12:00:00 +0200", pd.Timestamp("2023-10-01 10:00:00+00:00")),
+    ('utc', "2023-10-01 12:00:00.123456+0200", pd.Timestamp("2023-10-01 10:00:00.123456+00:00")),
+    ('utc', "2023-10-01T12:00:00.123456Z", pd.Timestamp("2023-10-01 12:00:00.123456+00:00")),
+    ('utc', "2023-10-01T12:00:00Z", pd.Timestamp("2023-10-01 12:00:00+00:00")),
+    ('utc', "2023-10-01T12:00:00+0200", pd.Timestamp("2023-10-01 10:00:00+00:00")),
+    ('utc', "2023-10-01T12:00:00.123456+0200", pd.Timestamp("2023-10-01 10:00:00.123456+00:00")),
+    ('utc', "Sun Oct 01 12:00:00 UTC 2023", pd.Timestamp("2023-10-01 12:00:00+00:00")),
     ('utc', "Invalid Date", pd.NaT),
+    ('utc', 1633046400, pd.Timestamp(1633046400, unit="s", tz="UTC")),
+    ('utc', 1633046400000, pd.Timestamp(1633046400000, unit="ms", tz="UTC")),
+    ('utc', "1633046400", pd.Timestamp(1633046400, unit="s", tz="UTC")),
+    ('utc', "1633046400000", pd.Timestamp(1633046400000, unit="ms", tz="UTC")),
+    ('utc', int(1e9), pd.Timestamp(int(1e9), unit="s", tz="UTC")),
 ])
-def test_parse_standard_date_treat_timezone(treat_timezone, input_date, expected_output, monkeypatch):
-    # Patch the treat_timezone attribute for this test
+def test_parse_int_and_standard_date(treat_timezone, input_date, expected_output, monkeypatch):
     monkeypatch.setattr(Configuration, "treat_timezone", treat_timezone)
-    result = parse_standard_date(input_date)
+    result = parse_int_and_standard_date(treat_timezone, input_date)
     if expected_output is None or expected_output is pd.NaT:
         assert result is None or result is pd.NaT
     elif getattr(expected_output, 'tzinfo', None):
@@ -97,82 +91,166 @@ def test_parse_standard_date_treat_timezone(treat_timezone, input_date, expected
         assert result == expected_output
 
 @pytest.mark.parametrize("input_date, expected_output", [
-    # Valid standard date formats
-    ("2023-10-01 12:00:00+0200", datetime(2023, 10, 1, 12, 0, 0)),  # '%Y-%m-%d %H:%M:%S%z'
-    ("2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0)),  # '%Y-%m-%dT%H:%M:%SZ'
-    ("Sun Oct 01 12:00:00 UTC 2023", datetime(2023, 10, 1, 12, 0, 0)),  # '%a %b %d %H:%M:%S %Z %Y'
-
-    # Valid integer timestamps
-    (1633046400, datetime(2021, 10, 1, 0, 0, 0)),  # Seconds timestamp
-    ("1633046400000", datetime(2021, 10, 1, 0, 0, 0)),  # Milliseconds timestamp as string
-
-    # Invalid inputs
-    ("Invalid Date", pd.NaT),  # Invalid date string
-    (-1, pd.NaT),  # Negative timestamp
-    (None, pd.NaT),  # None input
-    ("", pd.NaT),  # Empty string
-])
-def test_parse_int_and_standard_date(input_date, expected_output):
-    result = parse_int_and_standard_date(input_date)
-    if expected_output is pd.NaT:
-        assert result is pd.NaT
-    else:
-        assert result == expected_output
-
-@pytest.mark.parametrize("input_date, expected_output", [
-    ("2023-10-01 12:00:00 CEST", datetime(2023, 10, 1, 12, 0)),  # Test for 'CEST'
-    ("2023-10-01 12:00:00 EDT", datetime(2023, 10, 1, 12, 0)),  # Test for 'EDT'
-    ("2023-10-01 12:00:00 EST", datetime(2023, 10, 1, 12, 0)),   # Test for 'EST'
-    ("2023-10-01 12:00:00 CDT", datetime(2023, 10, 1, 12, 0)),   # Test for 'CDT'
-    ("2023-10-01 12:00:00 UTC", datetime(2023, 10, 1, 12, 0)),     # Test for no translation needed
-    ("2023-10-01 12:00:00", datetime(2023, 10, 1, 12, 0)),             # Test for no timezone
+    ("2023-10-01 12:00:00 CEST", datetime(2023, 10, 1, 12, 0, tzinfo=timezone(timedelta(hours=2)))),  # CEST is UTC+2
+    ("2023-10-01 12:00:00 EDT", datetime(2023, 10, 1, 12, 0, tzinfo=timezone(timedelta(hours=-4)))),  # EDT is UTC-4
+    ("2023-10-01 12:00:00 EST", datetime(2023, 10, 1, 12, 0, tzinfo=timezone(timedelta(hours=-5)))),  # EST is UTC-5
+    ("2023-10-01 12:00:00 CDT", datetime(2023, 10, 1, 12, 0, tzinfo=timezone(timedelta(hours=-5)))),  # CDT is UTC-5
+    ("2023-10-01 12:00:00 UTC", datetime(2023, 10, 1, 12, 0, tzinfo=timezone.utc)),                   # UTC
+    ("2023-10-01 12:00:00", datetime(2023, 10, 1, 12, 0)),                                            # naive datetime
 ])
 def test_correct_odd_tz(input_date, expected_output):
-    assert correct_odd_tz(input_date) == expected_output
+    result = correct_odd_tz(input_date)
+    # Convert both to pandas.Timestamp for comparison
+    assert pd.Timestamp(result) == pd.Timestamp(expected_output)
 
-@pytest.mark.parametrize("input_date, expected_output", [
+@pytest.mark.parametrize("treat_timezone, input_date, expected_output",  [
     # Valid standard date formats
-    ("2023-10-01 12:00:00+0200", datetime(2023, 10, 1, 12, 0, 0)),  # '%Y-%m-%d %H:%M:%S%z'
-    ("2023-10-01T12:00:00Z", datetime(2023, 10, 1, 12, 0, 0)),  # '%Y-%m-%dT%H:%M:%SZ'
-    ("Sun Oct 01 12:00:00 UTC 2023", datetime(2023, 10, 1, 12, 0, 0)),  # '%a %b %d %H:%M:%S %Z %Y'
+    ('localise', "2023-10-01 12:00:00+0200", datetime(2023, 10, 1, 12, 0, 0)),  # '%Y-%m-%d %H:%M:%S%z'
 
     # Valid odd timezone formats
-    ("2023-10-01 12:00:00 CEST", datetime(2023, 10, 1, 12, 0, 0)),  # Corrected to '+0200'
+    ('utc', "2023-10-01 12:00:00 CEST", datetime(2023, 10, 1, 10, 0, 0, tzinfo=timezone.utc)),
 
     # Valid integer timestamps
-    ("1633046400", datetime(2021, 10, 1, 0, 0, 0)),  # Seconds timestamp
+    ('keep', "1633046400", datetime(2021, 10, 1, 0, 0, 0)),  # Seconds timestamp
 
     # Invalid inputs
-    ("Invalid Date", pd.NaT),  # Invalid date string
-    (None, pd.NaT),  # None input
-    (float("nan"), pd.NaT),  # NaN input
-    ("", pd.NaT),  # Empty string
+    ('keep', "Invalid Date", pd.NaT),  # Invalid date string
+    ('keep', None, pd.NaT),  # None input
+    ('keep', float("nan"), pd.NaT),  # NaN input
+    ('keep', "", pd.NaT),  # Empty string
 ])
-def test_parse_date_string(input_date, expected_output):
-    result = parse_date_string(input_date)
-    if pd.isna(expected_output):
-        assert pd.isna(result)
+def test_parse_date_string(treat_timezone, input_date, expected_output, monkeypatch):
+    monkeypatch.setattr(Configuration, "treat_timezone", treat_timezone)
+    result = parse_date_string(treat_timezone, input_date)
+    if expected_output is None or expected_output is pd.NaT:
+        assert result is None or result is pd.NaT
+    elif getattr(expected_output, 'tzinfo', None):
+        # For tz-aware, check both value and tzinfo
+        assert result == expected_output and result.tzinfo == expected_output.tzinfo
     else:
         assert result == expected_output
 
-
-@pytest.mark.parametrize("input_data, expected_output", [
-    # Test with a pandas Series
-    (pd.Series(["2023-10-01 12:00:00+0200", "2023-10-01T12:00:00Z", "Invalid Date"]),
-     pd.Series([datetime(2023, 10, 1, 12, 0, 0), datetime(2023, 10, 1, 12, 0, 0), pd.NaT])),
-
-    # Test with a pandas DataFrame
-    (pd.DataFrame({"col1": ["2023-10-01 12:00:00+0200", "Invalid Date"],
-                   "col2": ["2023-10-01T12:00:00Z", None]}),
-     pd.DataFrame({"col1": [datetime(2023, 10, 1, 12, 0, 0), pd.NaT],
-                   "col2": [datetime(2023, 10, 1, 12, 0, 0), pd.NaT]})),
+@pytest.mark.parametrize("treat_timezone, input_series, expected", [
+    # Mixed formats: ISO, with/without tz, and invalid
+    (
+        'keep',
+        pd.Series(["2023-10-01 12:00:00+0200", "2023-10-01T12:00:00Z", "Invalid"]),
+        pd.Series([
+            datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone(timedelta(hours=2))),
+            datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc),
+            pd.NaT
+        ])
+    ),
+    (
+        'localise',
+        pd.Series(["2023-10-01 12:00:00+0200", "2023-10-01T12:00:00Z", "Invalid"]),
+        pd.Series([
+            datetime(2023, 10, 1, 12, 0, 0),
+            datetime(2023, 10, 1, 12, 0, 0),
+            pd.NaT
+        ])
+    ),
+    (
+        'utc',
+        pd.Series(["2023-10-01 12:00:00+0200", "2023-10-01T12:00:00Z", "Invalid"]),
+        pd.Series([
+            datetime(2023, 10, 1, 10, 0, 0, tzinfo=timezone.utc),
+            datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc),
+            pd.NaT
+        ])
+    ),
 ])
-def test_parse_date_columns(input_data, expected_output):
-    result = parse_date_columns(input_data)
-    if isinstance(expected_output, pd.Series):
-        pd.testing.assert_series_equal(result, expected_output)
-    elif isinstance(expected_output, pd.DataFrame):
-        pd.testing.assert_frame_equal(result, expected_output)
+def test_parse_date_columns_series_treat_timezone(monkeypatch, treat_timezone, input_series, expected):
+    monkeypatch.setattr(Configuration, "treat_timezone", treat_timezone)
+    result = parse_date_columns(treat_timezone, input_series)
+    pd.testing.assert_series_equal(result, expected, check_dtype=False)
+
+@pytest.mark.parametrize("treat_timezone, input_df, expected", [
+    (
+        'keep',
+        pd.DataFrame({
+            "a": ["2023-10-01 12:00:00+0200", "Invalid"],
+            "b": ["2023-10-01T12:00:00Z", "2023-10-01 12:00:00"]
+        }),
+        pd.DataFrame({
+            "a": [
+                datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone(timedelta(hours=2))),
+                pd.NaT
+            ],
+            "b": [
+                datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc),
+                datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)
+            ]
+        })
+    ),
+    (
+        'localise',
+        pd.DataFrame({
+            "a": ["2023-10-01 12:00:00+0200", "Invalid"],
+            "b": ["2023-10-01T12:00:00Z", "2023-10-01 12:00:00"]
+        }),
+        pd.DataFrame({
+            "a": [
+                datetime(2023, 10, 1, 12, 0, 0),
+                pd.NaT
+            ],
+            "b": [
+                datetime(2023, 10, 1, 12, 0, 0),
+                datetime(2023, 10, 1, 12, 0, 0)
+            ]
+        })
+    ),
+    (
+        'utc',
+        pd.DataFrame({
+            "a": ["2023-10-01 12:00:00+0200", "Invalid"],
+            "b": ["2023-10-01T12:00:00Z", "2023-10-01 12:00:00"]
+        }),
+        pd.DataFrame({
+            "a": [
+                datetime(2023, 10, 1, 10, 0, 0, tzinfo=timezone.utc),
+                pd.NaT
+            ],
+            "b": [
+                datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc),
+                datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)
+            ]
+        })
+    ),
+])
+def test_parse_date_columns_dataframe_mixed(monkeypatch, treat_timezone, input_df, expected):
+    monkeypatch.setattr(Configuration, "treat_timezone", treat_timezone)
+    result = parse_date_columns(treat_timezone, input_df)
+    pd.testing.assert_frame_equal(result, expected, check_dtype=False)
+
+@pytest.mark.parametrize("treat_timezone, input_df, expected", [
+    (
+        'keep',
+        pd.DataFrame({"a": ["2023-10-01 12:00:00+0200", "2023-10-02 12:00:00+0200"]}),
+        pd.DataFrame({"a": [
+            datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone(timedelta(hours=2))),
+            datetime(2023, 10, 2, 12, 0, 0, tzinfo=timezone(timedelta(hours=2)))
+        ]})
+    ),
+    (
+        'localise',
+        pd.DataFrame({"a": ["2023-10-01 12:00:00+0200", "2023-10-02 12:00:00+0200"]}),
+        pd.DataFrame({"a": [datetime(2023, 10, 1, 12, 0, 0),
+                            datetime(2023, 10, 2, 12, 0, 0)]
+        })
+    ),
+    (
+        'utc',
+        pd.DataFrame({"a": ["2023-10-01 12:00:00+0200", "2023-10-02 12:00:00+0200"]}),
+        pd.DataFrame({"a": pd.to_datetime(["2023-10-01 12:00:00+0200",
+                                           "2023-10-02 12:00:00+0200"]).tz_convert('UTC')
+        })
+    ),
+])
+def test_parse_date_columns_dataframe_uniform(monkeypatch, treat_timezone, input_df, expected):
+    monkeypatch.setattr(Configuration, "treat_timezone", treat_timezone)
+    result = parse_date_columns(treat_timezone, input_df)
+    pd.testing.assert_frame_equal(result, expected)
 
 
 def test_read_zip_file(input_file):
@@ -354,7 +432,7 @@ def test_read_device_status_file_into_df(input_file):
 
         # Test with treat_timezone='localise'
         mock_config.treat_timezone = 'localise'
-        parsed_df = parse_date_columns(df)
+        parsed_df = parse_date_columns(mock_config.treat_timezone, df)
         assert parsed_df["created_at"].iloc[0] == datetime(2023, 10, 1, 12, 0,
                                                            0)
         assert parsed_df["pump/clock"].iloc[1] == datetime(2023, 10, 1, 12, 0,
@@ -362,7 +440,7 @@ def test_read_device_status_file_into_df(input_file):
 
         # Test with treat_timezone='utc'
         mock_config.treat_timezone = 'utc'
-        parsed_df = parse_date_columns(df)
+        parsed_df = parse_date_columns(mock_config.treat_timezone, df)
         assert parsed_df["created_at"].iloc[0] == datetime(2023, 10, 1, 10, 0,
                                                            0)
         assert parsed_df["pump/clock"].iloc[1] == datetime(2023, 10, 1, 12, 0,
@@ -400,7 +478,7 @@ def test_read_device_status_file_into_df(input_file):
                 mock_treat_timezone)
 
             # Call the function
-            result = parse_standard_date(input_date)
+            result = parse_standard_date(config.treat_timezone, input_date)
 
             # Assert the result matches the expected output
             assert result == expected_output

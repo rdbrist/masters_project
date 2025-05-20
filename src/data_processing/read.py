@@ -10,6 +10,8 @@ import re
 from datetime import datetime, timezone
 from typing import Union
 
+from pandas.core import series
+
 from src.configurations import Configuration, GeneralisedCols, OpenAPSConfigs
 
 
@@ -193,7 +195,7 @@ def read_entries_file_into_df(archive, file, read_record, config):
                              },
                              names=['time', 'bg'],
                              na_values=[' null', '', " "])
-            df[['time']] = parse_date_columns(df[['time']])
+            df[['time']] = parse_date_columns(config.treat_timezone, df[['time']])
             read_record.add(df)
         except ValueError:  # A few files have headers that need cleansing first
             try:
@@ -206,11 +208,7 @@ def read_entries_file_into_df(archive, file, read_record, config):
                                       'sgv': pd.Float64Dtype()
                                   }).
                       rename(columns={'dateString': 'time', 'sgv': 'bg'}))
-                df[['time']] = parse_date_columns(df[['time']])
-                if config.treat_timezone == 'localise':
-                    df[['time']] = df[['time']].dt.tz_localize(None)
-                elif config.treat_timezone == 'utc':
-                    df[['time']] = df[['time']].apply(to_utc)
+                df[['time']] = parse_date_columns(config.treat_timezone, df[['time']])
                 read_record.add(df)
             except Exception as e:
                 print(f'ID {read_record.zip_id}: Could not read file: {file}')
@@ -256,8 +254,63 @@ def headers_in_file(file):
     header = pd.read_csv(file, nrows=0)
     return header.columns
 
+# --------------------- Date Parsing Functions --------------------- #
+def parse_date_columns(treat_timezone, df_time_cols: Union[pd.Series, pd.DataFrame]) \
+        -> pd.DataFrame:
+    """
+    Takes in a dataframe of date columns and returns parsed columns
+    :param treat_timezone: To determine the timezone treatment
+    :param df_time_cols: pd.Series or pd.DataFrame
+    :return parsed_cols: pd.DataFrame of parsed columns
+    """
+    # Only attempts one format, parse_date_string will attempt others
+    dt_format = 'ISO8601'
 
-def parse_standard_date(date_str):
+    if isinstance(df_time_cols, pd.Series):
+        parsed_cols = pd.Series()
+        try:
+            parsed_cols = (
+                pd.to_datetime(df_time_cols, format=dt_format, utc=False))
+        except ValueError:
+            parsed_cols = (df_time_cols.
+                           apply(lambda x: parse_date_string(treat_timezone, x)))
+    else:
+        parsed_cols = pd.DataFrame()
+        for col_name in df_time_cols.columns:
+            try:
+                parsed_cols[col_name] = pd.to_datetime(df_time_cols[col_name],
+                                                       format=dt_format,
+                                                       utc=False)
+            except ValueError:
+                parsed_cols[col_name] = (
+                    df_time_cols[col_name].
+                    apply(lambda x: parse_date_string(treat_timezone, x)))
+
+    if treat_timezone == 'localise':
+        if isinstance(parsed_cols, pd.Series):
+            parsed_cols = parsed_cols.dt.tz_localize(None)
+        else:
+            for col_name in parsed_cols.columns:
+                parsed_cols[col_name] = parsed_cols[col_name].dt.tz_localize(None)
+    elif treat_timezone == 'utc':
+        parsed_cols = ensure_utc(parsed_cols)
+
+    return parsed_cols
+
+def parse_date_string(treat_timezone, date_str):
+    if pd.isna(date_str):
+        return pd.NaT
+
+    parsed_dt = parse_int_and_standard_date(treat_timezone, date_str)
+
+
+
+    if parsed_dt != pd.NaT:
+        return parsed_dt
+
+    raise ValueError(f'Could not parse date {date_str}')
+
+def parse_standard_date(treat_timezone, date_str):
     formats = [
         '%Y-%m-%d %H:%M:%S',
         '%Y-%m-%d %H:%M:%S%z',
@@ -275,10 +328,11 @@ def parse_standard_date(date_str):
             # Replace any z or Z as the datetime becomes naive of tz otherwise
             date_str = re.sub(r'[Zz]$', '+00:00', date_str)
             new_dt = pd.to_datetime(date_str, format=fmt, utc=False)
-            if Configuration().treat_timezone == 'localise':
-                new_dt = new_dt.replace(tzinfo=None)
-            elif Configuration().treat_timezone == 'utc':
-                new_dt = to_utc(new_dt)
+            if treat_timezone == 'localise':
+                # new_dt = new_dt.replace(tzinfo=None)
+                new_dt = new_dt.tz_localize(None)
+            elif treat_timezone == 'utc':
+                new_dt = ensure_utc(new_dt)
             return new_dt
         except ValueError:
             logging.info(f'Could not parse date {date_str}: {date_str}')
@@ -287,7 +341,7 @@ def parse_standard_date(date_str):
     return pd.NaT
 
 
-def parse_int_date(date_str):
+def parse_int_date(treat_timezone, date_str):
     try:
         numeric_dt = pd.to_numeric(date_str)
         if abs(numeric_dt) > 1e12:  # Threshold for milliseconds (1 trillion)
@@ -297,12 +351,16 @@ def parse_int_date(date_str):
         else:
             unit = 's'
         result = pd.to_datetime(numeric_dt, unit=unit, errors='raise')
+        if treat_timezone == 'localise':
+            result = result.tz_localize(None)
+        elif treat_timezone == 'utc':
+            result = ensure_utc(result)
         return result
     except ValueError:
         return pd.NaT
 
 
-def parse_int_and_standard_date(date_str):
+def parse_int_and_standard_date(treat_timezone, date_str):
 
     def is_integer(s):
         try:
@@ -314,9 +372,14 @@ def parse_int_and_standard_date(date_str):
     if pd.isna(date_str):
         return pd.NaT
     elif is_integer(date_str):  # Checks for int type epoch timestamps
-        parsed_dt = parse_int_date(date_str)
+        parsed_dt = parse_int_date(treat_timezone, date_str)
     else:
-        parsed_dt = parse_standard_date(date_str)
+        parsed_dt = parse_standard_date(treat_timezone, date_str)
+
+    # Last resort for odd timezones
+    if pd.isna(parsed_dt):
+        parsed_dt = correct_odd_tz(date_str)
+        parsed_dt = parse_standard_date(treat_timezone, parsed_dt)
 
     if parsed_dt != pd.NaT:
         return parsed_dt
@@ -326,61 +389,15 @@ def parse_int_and_standard_date(date_str):
 
 def correct_odd_tz(date_str):  # Checks for untranslatable timezones
     tz_translate = {' CEST': ' +0200',
-                    ' EDT': ' +0400',
-                    ' EST': ' +0500',
-                    ' CDT': ' +0500',
+                    ' EDT': ' -0400',
+                    ' EST': ' -0500',
+                    ' CDT': ' -0500',
                     ' UTC': ' +0000'}
 
     for key, value in tz_translate.items():
         date_str = date_str.replace(key, value)
 
-    return parse_standard_date(date_str)
-
-
-def parse_date_string(date_str):
-    if pd.isna(date_str):
-        return pd.NaT
-
-    parsed_dt = parse_int_and_standard_date(date_str)
-
-    if pd.isna(parsed_dt):
-        parsed_dt = correct_odd_tz(date_str)
-
-    if parsed_dt != pd.NaT:
-        return parsed_dt
-
-    raise ValueError(f'Could not parse date {date_str}')
-
-
-def parse_date_columns(df_time_cols: Union[pd.Series, pd.DataFrame]) \
-        -> pd.DataFrame:
-    """
-    Takes in a dataframe of date columns and returns parsed columns
-    :param df_time_cols: pd.Series or pd.DataFrame
-    :return parsed_cols: pd.DataFrame of parsed columns
-    """
-    # Only attempts one format, parse_date_string will attempt others
-    dt_format = 'ISO8601'
-
-    if isinstance(df_time_cols, pd.Series):
-        parsed_cols = pd.Series()
-        try:
-            parsed_cols = (
-                pd.to_datetime(df_time_cols, format=dt_format, utc=False))
-        except ValueError:
-            parsed_cols = df_time_cols.apply(parse_date_string)
-    else:
-        parsed_cols = pd.DataFrame()
-        for col_name in df_time_cols.columns:
-            try:
-                parsed_cols[col_name] = pd.to_datetime(df_time_cols[col_name],
-                                                       format=dt_format,
-                                                       utc=False)
-            except ValueError:
-                parsed_cols[col_name] = (
-                    df_time_cols[col_name].apply(parse_date_string))
-
-    return parsed_cols
+    return date_str
 
 
 # reads OpenAPS device status file
@@ -395,16 +412,7 @@ def read_device_status_file_and_convert_date(actual_headers,
                      dtype=config.device_status_col_type,
                      )
 
-    df[time_cols] = parse_date_columns(df[time_cols])
-
-    for col in time_cols:  # Treat timezone
-        try:
-            if config.treat_timezone == 'localise':
-                df[col] = df[col].dt.tz_localize(None)
-            elif config.treat_timezone == 'utc':
-                df[col] = df[col].apply(to_utc)
-        except Exception as e:
-            raise e
+    df[time_cols] = parse_date_columns(config.treat_timezone, df[time_cols])
 
     return df
 
@@ -438,12 +446,25 @@ def read_device_status_from_zip(file, config):
                          is_a_device_status_csv_file,
                          read_device_status_file_into_df)
 
-def to_utc(dt: datetime) -> datetime:
-    # # Convert naive datetime to UTC
-    # if dt.tzinfo is None:
-    #     return dt.replace(tzinfo=timezone.utc)
-    # else:
-    #     return dt.astimezone(timezone.utc)
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+def ensure_utc(val):
+    """
+    Ensures input (Series or scalar) is timezone-aware and in UTC.
+    """
+    def series_to_utc(ser):
+        if ser.dt.tz is None:
+            return ser.dt.tz_localize('UTC')
+        else:
+            return ser.dt.tz_convert('UTC')
+
+    if isinstance(val, pd.Series):
+        val = series_to_utc(val)
+    elif isinstance(val, pd.DataFrame):
+        for col in val.columns:
+            val[col] = series_to_utc(val[col])
+    else:
+        if val.tzinfo is None:
+            val = val.tz_localize('UTC')
+        else:
+            val = val.tz_convert('UTC')
+
+    return val
