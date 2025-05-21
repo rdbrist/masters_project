@@ -203,6 +203,9 @@ class Configuration:
         'openaps/iob/activity': str,
     }
 
+    # profile files
+    profile_csv_file_start = '_profile'
+
     # Output filename definitions
     device_status_prefix = 'device_status_df'
     tz_suffix_dict = {'keep': '_tz_aware', 'utc': '_tz_utc', 'localise': '_tz_naive'}

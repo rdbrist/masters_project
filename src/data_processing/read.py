@@ -399,6 +399,7 @@ def correct_odd_tz(date_str):  # Checks for untranslatable timezones
 
     return date_str
 
+#------------------------------------------------------------------------------#
 
 # reads OpenAPS device status file
 def read_device_status_file_and_convert_date(actual_headers,
@@ -428,7 +429,7 @@ def is_a_bg_csv_file(config, patient_id, file_path):
     return startswith and endswith
 
 
-# checks if a file from zip namelist is a bg csv file
+# checks if a file from zip namelist is a device status csv file
 def is_a_device_status_csv_file(config, patient_id, file_path):
     # file starts with patient id and _entries
     start_string = patient_id + config.device_status_csv_file_start
