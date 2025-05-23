@@ -170,7 +170,7 @@ def extract_timezone(read_record, config):
     return df['timezone'].unique()
 
 
-def convert_region_string_to_utc_offset(val):
+def convert_timezone_to_utc_offset(val):
     """
     Converts an IANA region string or a datetime.timezone to its UTC offset (timedelta).
     Returns None if input is invalid or offset cannot be determined.
@@ -198,15 +198,19 @@ def convert_region_string_to_utc_offset(val):
 
     return None
 
-    # Handle datetime or pd.Timestamp
-    if isinstance(val, (datetime, pd.Timestamp)):
-        if val.tzinfo is not None:
-            return val.utcoffset()
-        else:
-            # Naive datetime, no offset
-            return None
-
-    return None
+def convert_all_timezones_to_utc_offset(timezones: dict) -> dict:
+    """
+    Convert all timezones in the given dictionary to UTC offsets.
+    :param timezones: (dict) A dictionary where keys are zip IDs and values are lists of timezones.
+    :return: (dict) A dictionary with the same zip_id keys, but with UTC offsets as values.
+    """
+    utc_offset_dict = {}
+    for zip_id, tzs in timezones.items():
+        utc_offsets = []
+        for tz in tzs:  # tzs is a list of timezones
+            utc_offsets.append(convert_timezone_to_utc_offset(tz))
+        utc_offset_dict[zip_id] = utc_offsets
+    return utc_offset_dict
 
 # ------------------------- Read BG Functions --------------------------- #
 

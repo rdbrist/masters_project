@@ -21,7 +21,7 @@ from src.data_processing.read import (
     read_device_status_file_into_df,
     read_device_status_from_zip,
     extract_timezone,
-    convert_region_string_to_utc_offset
+    convert_timezone_to_utc_offset
 )
 from datetime import datetime, timezone, timedelta
 
@@ -592,8 +592,8 @@ def test_extract_timezone_permutations():
     (timezone(timedelta(hours=-5)), -5),
     (timezone(timedelta(hours=9, minutes=30)), 9),  # Only hour part checked
 ])
-def test_convert_region_string_to_utc_offset(val, expected_offset_hours):
-    offset = convert_region_string_to_utc_offset(val)
+def test_convert_timezone_to_utc_offset(tmz, expected_offset_hours):
+    offset = convert_timezone_to_utc_offset(tmz)
     assert offset is not None
     assert isinstance(offset, timedelta)
     assert offset.total_seconds() // 3600 == expected_offset_hours
