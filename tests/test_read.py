@@ -19,7 +19,9 @@ from src.data_processing.read import (
     read_all_device_status,
     read_all_bg,
     read_device_status_file_into_df,
-    read_device_status_from_zip
+    read_device_status_from_zip,
+    extract_timezone,
+    convert_region_string_to_utc_offset
 )
 from datetime import datetime, timezone, timedelta
 
@@ -482,3 +484,116 @@ def test_read_device_status_file_into_df(input_file):
 
             # Assert the result matches the expected output
             assert result == expected_output
+
+class DummyConfig(Configuration):
+    def time_cols(self):
+        # For BG: ['time'], Device: ['created_at', 'pump/clock'], Profile: ['startDate']
+        return ['time', 'created_at', 'pump/clock', 'startDate']
+
+def test_extract_timezone_permutations():
+    config = DummyConfig()
+
+    # BG entries: one timezone
+    rr_bg_one = ReadRecord(df=pd.DataFrame({'time': [
+        pd.Timestamp('2023-10-01 12:00:00+02:00'),
+        pd.Timestamp('2023-10-01 13:00:00+02:00')
+    ]}))
+    tzs = extract_timezone(rr_bg_one, config)
+    assert set(tzs) == {timezone(timedelta(hours=2))}
+
+    # BG entries: two timezones
+    rr_bg_two = ReadRecord(df=pd.DataFrame({'time': [
+        pd.Timestamp('2023-10-01 12:00:00+02:00'),
+        pd.Timestamp('2023-10-01 11:00:00+01:00')
+    ]}))
+    tzs = extract_timezone(rr_bg_two, config)
+    assert set(tzs) == {timezone(timedelta(hours=2)), timezone(timedelta(hours=1))}
+
+    # BG entries: timezone naive
+    rr_bg_naive = ReadRecord(df=pd.DataFrame({'time': [
+        pd.Timestamp('2023-10-01 12:00:00'),
+        pd.Timestamp('2023-10-01 13:00:00')
+    ]}))
+    tzs = extract_timezone(rr_bg_naive, config)
+    assert all(tz is None for tz in tzs)
+
+    # Device status: one timezone
+    rr_dev_one = ReadRecord(df=pd.DataFrame({'created_at': [
+        pd.Timestamp('2023-10-01T12:00:00+00:00'),
+        pd.Timestamp('2023-10-01T13:00:00+00:00')
+    ], 'pump/clock': [
+        pd.Timestamp('2023-10-01T12:00:00+00:00'),
+        pd.Timestamp('2023-10-01T13:00:00+00:00')
+    ]}))
+    tzs = extract_timezone(rr_dev_one, config)
+    assert set(tzs) == {timezone.utc}
+
+    # Device status: two timezones
+    rr_dev_two = ReadRecord(df=pd.DataFrame({'created_at': [
+        pd.Timestamp('2023-10-01T12:00:00+01:00'),
+        pd.Timestamp('2023-10-01T13:00:00+02:00')
+    ], 'pump/clock': [
+        pd.Timestamp('2023-10-01T12:00:00+01:00'),
+        pd.Timestamp('2023-10-01T13:00:00+02:00')
+    ]}))
+    tzs = extract_timezone(rr_dev_two, config)
+    assert set(tzs) == {timezone(timedelta(hours=1)), timezone(timedelta(hours=2))}
+
+    # Device status: timezone naive
+    rr_dev_naive = ReadRecord(df=pd.DataFrame({'created_at': [
+        pd.Timestamp('2023-10-01T12:00:00'),
+        pd.Timestamp('2023-10-01T13:00:00')
+    ], 'pump/clock': [
+        pd.Timestamp('2023-10-01T12:00:00'),
+        pd.Timestamp('2023-10-01T13:00:00')
+    ]}))
+    tzs = extract_timezone(rr_dev_naive, config)
+    assert all(tz is None for tz in tzs)
+
+    # Profile: one timezone
+    rr_prof_one = ReadRecord(df=pd.DataFrame({'startDate': [
+        pd.Timestamp('2023-10-01T12:00:00+03:00'),
+        pd.Timestamp('2023-10-01T13:00:00+03:00')
+    ]}))
+    tzs = extract_timezone(rr_prof_one, config)
+    assert set(tzs) == {timezone(timedelta(hours=3))}
+
+    # Profile: two timezones
+    rr_prof_two = ReadRecord(df=pd.DataFrame({'startDate': [
+        pd.Timestamp('2023-10-01T12:00:00+03:00'),
+        pd.Timestamp('2023-10-01T13:00:00+04:00')
+    ]}))
+    tzs = extract_timezone(rr_prof_two, config)
+    assert set(tzs) == {timezone(timedelta(hours=3)), timezone(timedelta(hours=4))}
+
+    # Profile: timezone naive
+    rr_prof_naive = ReadRecord(df=pd.DataFrame({'startDate': [
+        pd.Timestamp('2023-10-01T12:00:00'),
+        pd.Timestamp('2023-10-01T13:00:00')
+    ]}))
+    tzs = extract_timezone(rr_prof_naive, config)
+    assert all(tz is None for tz in tzs)
+
+@pytest.mark.parametrize("val, expected_offset_hours", [
+    # IANA region strings
+    ("Europe/Berlin", 2),
+    ("America/New_York", -4),
+    ("Asia/Tokyo", 9),
+    ("Australia/Sydney", 10),
+    ("America/Los_Angeles", -7),
+    ("Africa/Nairobi", 3),
+    ("America/Sao_Paulo", -3),
+    ("Europe/London", 1),
+    ("Pacific/Auckland", 12),
+    ("America/Anchorage", -8),
+    # datetime.timezone objects
+    (timezone.utc, 0),
+    (timezone(timedelta(hours=2)), 2),
+    (timezone(timedelta(hours=-5)), -5),
+    (timezone(timedelta(hours=9, minutes=30)), 9),  # Only hour part checked
+])
+def test_convert_region_string_to_utc_offset(val, expected_offset_hours):
+    offset = convert_region_string_to_utc_offset(val)
+    assert offset is not None
+    assert isinstance(offset, timedelta)
+    assert offset.total_seconds() // 3600 == expected_offset_hours

@@ -297,9 +297,16 @@ class Configuration:
         return [k for k in self.device_status_col_type.keys() if 'pump/' in k]
 
     def time_cols(self):
-        return ['created_at', 'openaps/enacted/deliverAt', 'pump/clock'] \
-               + [k for k in self.device_status_col_type.keys()
-                  if 'time' in str(k).lower()]
+        profile_col = ['startDate']
+        device_status_cols_a = \
+            [k for k in self.device_status_col_type.keys()
+             if 'time' in str(k).lower()]
+        device_status_cols_b =  ['created_at',
+                                 'openaps/enacted/deliverAt',
+                                 'pump/clock']
+        entries_col = ['time']
+        return (profile_col + device_status_cols_a +
+                device_status_cols_b + entries_col)
 
 
 # Configuration to use for unit tests. This turns Wandb logging off.

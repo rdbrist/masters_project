@@ -8,10 +8,8 @@ import logging
 import pandas as pd
 import re
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Union
-
-from pandas.core import series
-
 from src.configurations import Configuration, GeneralisedCols, OpenAPSConfigs
 
 
@@ -31,6 +29,7 @@ class ReadRecord:
     number_of_rows_with_nan: int = 0
     earliest_date: str = ''  # oldest date in series
     newest_date: str = ''  # newest date in series
+    timezones: list = None  # List of timezones for datetimes in the df
 
     # helper method to set read records if there are no files
     def zero_files(self):
@@ -82,35 +81,12 @@ class ReadRecord:
         self.number_of_rows_without_nan = self.df.dropna().shape[0]
         self.number_of_rows_with_nan = (self.df.shape[0] -
                                         self.df.dropna().shape[0])
-        self.earliest_date = str(self.df[time_col_name].min())
-        self.newest_date = str(self.df[time_col_name].max())
-
-
-
-
-# reads flat device data csv and does preprocessing
-# allows path for file to read
-def read_flat_device_status_df_from_file(file: Path, config: Configuration):
-    return read_device_status_file_and_convert_date(headers_in_file(file),
-                                                    config,
-                                                    file)
-
-
-# reads all BG files from each zip files without extracting the zip
-def read_all_bg(config: Configuration):
-    return read_all(config, read_bg_from_zip)
-
-
-# reads all device status files into a list of read records
-def read_all_device_status(config):
-    """
-    Reads all device status files from each zip file without extracting the zip.
-    Return is a list of ReadRecords with the dataframes, consolidating the
-    device status files from each zip file.
-    :param config:
-    :return: ReadRecord list with the dataframes
-    """
-    return read_all(config, read_device_status_from_zip)
+        try:
+            self.earliest_date = str(self.df[time_col_name].min())
+            self.newest_date = str(self.df[time_col_name].max())
+        except KeyError:
+            # If the time column is not in the dataframe, ignore
+            return
 
 
 # reads all files using function
@@ -126,15 +102,6 @@ def read_all(config, function):
         read_record = function(file, config)
         read_records.append(read_record)
     return read_records
-
-
-# reads BGs into df from the entries csv file in the given zip file without
-# extracting the zip
-def read_bg_from_zip(file_name, config):
-    return read_zip_file(config,
-                         file_name,
-                         is_a_bg_csv_file,
-                         read_entries_file_into_df)
 
 
 # generic zip file read method
@@ -182,9 +149,90 @@ def read_zip_file(config,
         return read_record
 
 
+def headers_in_file(file):
+    header = pd.read_csv(file, nrows=0)
+    return header.columns
+
+
+def extract_timezone(read_record, config):
+    try:
+        time_cols = [c for c in config.time_cols() if c in read_record.df.columns]
+    except AttributeError:
+        print(f'{read_record.zip_id} has no df')
+        return
+    df = read_record.df[time_cols].melt(var_name='column', value_name='datetime')
+    # Extract timezone from each value individually
+    def get_tz(val):
+        if isinstance(val, pd.Timestamp):
+            return val.tzinfo
+        return None
+    df['timezone'] = df['datetime'].apply(get_tz)
+    return df['timezone'].unique()
+
+
+def convert_region_string_to_utc_offset(val):
+    """
+    Converts an IANA region string or a datetime.timezone to its UTC offset (timedelta).
+    Returns None if input is invalid or offset cannot be determined.
+    """
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    if val is None:
+        return None
+
+    # Handle IANA region string
+    if isinstance(val, str):
+        try:
+            tz = ZoneInfo(val)
+            now = datetime.now(tz)
+            return now.utcoffset()
+        except Exception as e:
+            print(f"Error converting timezone: {e}")
+            return None
+
+    # Handle datetime.timezone
+    if isinstance(val, timezone):
+        # Use a dummy datetime to get the offset
+        return datetime.now(val).utcoffset()
+
+    return None
+
+    # Handle datetime or pd.Timestamp
+    if isinstance(val, (datetime, pd.Timestamp)):
+        if val.tzinfo is not None:
+            return val.utcoffset()
+        else:
+            # Naive datetime, no offset
+            return None
+
+    return None
+
+# ------------------------- Read BG Functions --------------------------- #
+
+# reads all BG files from each zip files without extracting the zip
+def read_all_bg(config: Configuration):
+    return read_all(config, read_bg_from_zip)
+
+
+# reads BGs into df from the entries csv file in the given zip file without
+# extracting the zip
+def read_bg_from_zip(file_name, config):
+    return read_zip_file(config,
+                         file_name,
+                         is_a_bg_csv_file,
+                         read_entries_file_into_df)
+
+
 # reads BG data from entries file into df and adds it to read_record,
 # config is there for consistency
 def read_entries_file_into_df(archive, file, read_record, config):
+
+    def add_record(df, read_record, config):
+        df[['time']] = parse_date_columns(config.treat_timezone, df[['time']])
+        read_record.add(df)
+        read_record.timezones = extract_timezone(read_record, config)
+
     with archive.open(file, mode="r") as bg_file:
         try:
             df = pd.read_csv(TextIOWrapper(bg_file, encoding="utf-8"),
@@ -195,8 +243,7 @@ def read_entries_file_into_df(archive, file, read_record, config):
                              },
                              names=['time', 'bg'],
                              na_values=[' null', '', " "])
-            df[['time']] = parse_date_columns(config.treat_timezone, df[['time']])
-            read_record.add(df)
+            add_record(df, read_record, config)
         except ValueError:  # A few files have headers that need cleansing first
             try:
                 df = (pd.read_csv(TextIOWrapper(bg_file, encoding="utf-8"),
@@ -208,11 +255,51 @@ def read_entries_file_into_df(archive, file, read_record, config):
                                       'sgv': pd.Float64Dtype()
                                   }).
                       rename(columns={'dateString': 'time', 'sgv': 'bg'}))
-                df[['time']] = parse_date_columns(config.treat_timezone, df[['time']])
-                read_record.add(df)
+                add_record(df, read_record, config)
             except Exception as e:
                 print(f'ID {read_record.zip_id}: Could not read file: {file}')
                 print(e)
+
+
+# checks if a file from zip namelist is a bg csv file
+def is_a_bg_csv_file(config, patient_id, file_path):
+    # file starts with patient id and _entries
+    start_string = patient_id + config.bg_csv_file_start
+    startswith = Path(file_path).name.startswith(start_string)
+
+    # has right file ending
+    endswith = file_path.endswith(config.bg_csv_file_extension)
+    return startswith and endswith
+
+
+#-------------------------- Read Device Status File ---------------------------#
+
+# reads flat device data csv and does preprocessing
+# allows path for file to read
+def read_flat_device_status_df_from_file(file: Path, config: Configuration):
+    return read_device_status_file_and_convert_date(headers_in_file(file),
+                                                    config,
+                                                    file)
+
+
+# reads all device status files into a list of read records
+def read_all_device_status(config):
+    """
+    Reads all device status files from each zip file without extracting the zip.
+    Return is a list of ReadRecords with the dataframes, consolidating the
+    device status files from each zip file.
+    :param config:
+    :return: ReadRecord list with the dataframes
+    """
+    return read_all(config, read_device_status_from_zip)
+
+
+# reads a device status file
+def read_device_status_from_zip(file, config):
+    return read_zip_file(config,
+                         file,
+                         is_a_device_status_csv_file,
+                         read_device_status_file_into_df)
 
 
 # reads device status file into df and adds it to read_record
@@ -248,14 +335,90 @@ def read_device_status_file_into_df(archive, file, read_record, config):
             io_wrapper = TextIOWrapper(file_context, encoding="utf-8")
             df = pd.read_csv(io_wrapper)
     read_record.add(df)
+    read_record.timezones = extract_timezone(read_record, config)
 
 
-def headers_in_file(file):
-    header = pd.read_csv(file, nrows=0)
-    return header.columns
+# reads OpenAPS device status file
+def read_device_status_file_and_convert_date(actual_headers,
+                                             config,
+                                             file_to_read):
+    # First check columns that are in this file
+    time_cols = [k for k in config.time_cols() if k in actual_headers]
+    cols = config.device_status_col_type.keys()
+    df = pd.read_csv(file_to_read,
+                     usecols=lambda c: c in set(cols),
+                     dtype=config.device_status_col_type,
+                     )
 
-# --------------------- Date Parsing Functions --------------------- #
-def parse_date_columns(treat_timezone, df_time_cols: Union[pd.Series, pd.DataFrame]) \
+    df[time_cols] = parse_date_columns(config.treat_timezone, df[time_cols])
+
+    return df
+
+
+# checks if a file from zip namelist is a device status csv file
+def is_a_device_status_csv_file(config, patient_id, file_path):
+    # file starts with patient id and _entries
+    start_string = patient_id + config.device_status_csv_file_start
+    startswith = Path(file_path).name.startswith(start_string)
+
+    # has right file ending
+    endswith = file_path.endswith(config.csv_extension)
+    return startswith and endswith
+
+
+# ------------------------ Read Profile Functions --------------------------- #
+
+def read_all_profile_timezones(config: Configuration) -> dict:
+    read_records = read_all(config, read_profile_from_zip)
+    timezones_dict = {}
+    for rr in read_records:
+        timezones_dict[rr.zip_id] = get_unique_timezones_from_profile(rr)
+    return timezones_dict
+
+
+def read_profile_from_zip(file_name, config):
+    return read_zip_file(config,
+                         file_name,
+                         is_a_profile_csv_file,
+                         read_profile_file_to_df)
+
+
+def read_profile_file_to_df(archive, file, read_record, config):
+    with archive.open(file, mode="r") as header_context:
+        text_io_wrapper = TextIOWrapper(header_context, encoding="utf-8")
+        header_cols = headers_in_file(text_io_wrapper)
+        tz_cols = timezone_columns(header_cols)
+    with archive.open(file, mode='r') as profile_file:
+        file_name = TextIOWrapper(profile_file, encoding='utf-8')
+        # read the file into a DataFrame
+        df = pd.read_csv(file_name, usecols=['defaultProfile']+tz_cols)
+    return read_record.add(df)
+
+
+def get_unique_timezones_from_profile(read_record: ReadRecord) -> list:
+    df = (read_record.df
+          .melt(id_vars=['defaultProfile'], var_name='column_name',
+                 value_name='timezone')
+          .dropna())
+    return list(df['timezone'].unique())
+
+
+def is_a_profile_csv_file(config, patient_id, file_path):
+    # file starts with patient id and _entries
+    start_string = patient_id + config.profile_csv_file_start
+    startswith = Path(file_path).name.startswith(start_string)
+
+    # has right file ending
+    endswith = file_path.endswith(config.csv_extension)
+    return startswith and endswith
+
+def timezone_columns(columns):
+    timezone_cols = [col for col in columns if re.search(r"timezone", col)]
+    return timezone_cols
+
+# -------------------------- Date Parsing Functions -------------------------- #
+def parse_date_columns(treat_timezone,
+                       df_time_cols: Union[pd.Series, pd.DataFrame])\
         -> pd.DataFrame:
     """
     Takes in a dataframe of date columns and returns parsed columns
@@ -297,18 +460,18 @@ def parse_date_columns(treat_timezone, df_time_cols: Union[pd.Series, pd.DataFra
 
     return parsed_cols
 
+
 def parse_date_string(treat_timezone, date_str):
+    if isinstance(date_str, pd.Timestamp):
+        return date_str
     if pd.isna(date_str):
         return pd.NaT
-
     parsed_dt = parse_int_and_standard_date(treat_timezone, date_str)
-
-
-
     if parsed_dt != pd.NaT:
         return parsed_dt
 
     raise ValueError(f'Could not parse date {date_str}')
+
 
 def parse_standard_date(treat_timezone, date_str):
     formats = [
@@ -366,7 +529,7 @@ def parse_int_and_standard_date(treat_timezone, date_str):
         try:
             int(s)
             return True
-        except ValueError:
+        except (ValueError, TypeError):
             return False
 
     if pd.isna(date_str):
@@ -399,53 +562,6 @@ def correct_odd_tz(date_str):  # Checks for untranslatable timezones
 
     return date_str
 
-#------------------------------------------------------------------------------#
-
-# reads OpenAPS device status file
-def read_device_status_file_and_convert_date(actual_headers,
-                                             config,
-                                             file_to_read):
-    # First check columns that are in this file
-    time_cols = [k for k in config.time_cols() if k in actual_headers]
-    cols = config.device_status_col_type.keys()
-    df = pd.read_csv(file_to_read,
-                     usecols=lambda c: c in set(cols),
-                     dtype=config.device_status_col_type,
-                     )
-
-    df[time_cols] = parse_date_columns(config.treat_timezone, df[time_cols])
-
-    return df
-
-
-# checks if a file from zip namelist is a bg csv file
-def is_a_bg_csv_file(config, patient_id, file_path):
-    # file starts with patient id and _entries
-    start_string = patient_id + config.bg_csv_file_start
-    startswith = Path(file_path).name.startswith(start_string)
-
-    # has right file ending
-    endswith = file_path.endswith(config.bg_csv_file_extension)
-    return startswith and endswith
-
-
-# checks if a file from zip namelist is a device status csv file
-def is_a_device_status_csv_file(config, patient_id, file_path):
-    # file starts with patient id and _entries
-    start_string = patient_id + config.device_status_csv_file_start
-    startswith = Path(file_path).name.startswith(start_string)
-
-    # has right file ending
-    endswith = file_path.endswith(config.csv_extension)
-    return startswith and endswith
-
-
-# reads a device status file
-def read_device_status_from_zip(file, config):
-    return read_zip_file(config,
-                         file,
-                         is_a_device_status_csv_file,
-                         read_device_status_file_into_df)
 
 def ensure_utc(val):
     """
