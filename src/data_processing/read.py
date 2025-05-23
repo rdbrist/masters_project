@@ -7,8 +7,8 @@ from pathlib import Path
 import logging
 import pandas as pd
 import re
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
+import warnings
+from datetime import datetime
 from typing import Union
 from src.configurations import Configuration, GeneralisedCols, OpenAPSConfigs
 
@@ -29,7 +29,7 @@ class ReadRecord:
     number_of_rows_with_nan: int = 0
     earliest_date: str = ''  # oldest date in series
     newest_date: str = ''  # newest date in series
-    timezones: list = None  # List of timezones for datetimes in the df
+    utc_offsets: list = None  # List of utc offsets for datetimes in the df
 
     # helper method to set read records if there are no files
     def zero_files(self):
@@ -154,63 +154,64 @@ def headers_in_file(file):
     return header.columns
 
 
-def extract_timezone(read_record, config):
+def extract_timezone_offset(read_record, config):
     try:
-        time_cols = [c for c in config.time_cols() if c in read_record.df.columns]
+        time_cols = [c for c in config.time_cols()
+                     if c in read_record.df.columns]
     except AttributeError:
         print(f'{read_record.zip_id} has no df')
         return
-    df = read_record.df[time_cols].melt(var_name='column', value_name='datetime')
+    df = (read_record.df[time_cols].
+          melt(var_name='column', value_name='datetime'))
     # Extract timezone from each value individually
     def get_tz(val):
-        if isinstance(val, pd.Timestamp):
+        if isinstance(val, pd.Timestamp) or isinstance(val, datetime):
             return val.tzinfo
         return None
+    if pd.api.types.is_datetime64_any_dtype(df['datetime']):
+        df['timezone'] = df['datetime'].dt.tz
     df['timezone'] = df['datetime'].apply(get_tz)
-    return df['timezone'].unique()
+    df['utc_offset'] = (df['timezone'].
+                        apply(lambda x: convert_timezone_to_utc_offset(x)))
+    return df['utc_offset'].unique()
 
 
-def convert_timezone_to_utc_offset(val):
+def convert_timezone_to_utc_offset(tz_val, dt=None):
     """
-    Converts an IANA region string or a datetime.timezone to its UTC offset (timedelta).
-    Returns None if input is invalid or offset cannot be determined.
+    Converts an IANA region string or a datetime.timezone to its UTC offset
+    (timedelta). Returns None if input is intz_valid or offset cannot be determined.
     """
     from datetime import datetime, timezone
-    from zoneinfo import ZoneInfo
+    import pytz
 
-    if val is None:
+    if tz_val is None:
         return None
 
     # Handle IANA region string
-    if isinstance(val, str):
+    if isinstance(tz_val, str):
+        if tz_val.endswith('-New'):  # Handles special case of US/Pacific-New
+            tz_val = tz_val[:-4]
         try:
-            tz = ZoneInfo(val)
-            now = datetime.now(tz)
-            return now.utcoffset()
+            tz = pytz.timezone(tz_val)
+            if dt is None:
+                dt = datetime.now(timezone.utc).replace(tzinfo=None)  # naive UTC
+            elif dt.tzinfo is not None:
+                # Convert aware datetime to naive UTC
+                dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            offset = tz.utcoffset(dt)
+            return int(offset.total_seconds() // 3600)
         except Exception as e:
             print(f"Error converting timezone: {e}")
             return None
 
     # Handle datetime.timezone
-    if isinstance(val, timezone):
+    if isinstance(tz_val, timezone):
         # Use a dummy datetime to get the offset
-        return datetime.now(val).utcoffset()
+        offset = datetime.now(tz_val).utcoffset()
+        return int(offset.total_seconds() // 3600)
 
     return None
 
-def convert_all_timezones_to_utc_offset(timezones: dict) -> dict:
-    """
-    Convert all timezones in the given dictionary to UTC offsets.
-    :param timezones: (dict) A dictionary where keys are zip IDs and values are lists of timezones.
-    :return: (dict) A dictionary with the same zip_id keys, but with UTC offsets as values.
-    """
-    utc_offset_dict = {}
-    for zip_id, tzs in timezones.items():
-        utc_offsets = []
-        for tz in tzs:  # tzs is a list of timezones
-            utc_offsets.append(convert_timezone_to_utc_offset(tz))
-        utc_offset_dict[zip_id] = utc_offsets
-    return utc_offset_dict
 
 # ------------------------- Read BG Functions --------------------------- #
 
@@ -235,7 +236,7 @@ def read_entries_file_into_df(archive, file, read_record, config):
     def add_record(df, read_record, config):
         df[['time']] = parse_date_columns(config.treat_timezone, df[['time']])
         read_record.add(df)
-        read_record.timezones = extract_timezone(read_record, config)
+        read_record.utc_offsets = extract_timezone_offset(read_record, config)
 
     with archive.open(file, mode="r") as bg_file:
         try:
@@ -339,7 +340,7 @@ def read_device_status_file_into_df(archive, file, read_record, config):
             io_wrapper = TextIOWrapper(file_context, encoding="utf-8")
             df = pd.read_csv(io_wrapper)
     read_record.add(df)
-    read_record.timezones = extract_timezone(read_record, config)
+   # read_record.utc_offsets = extract_timezone_offset(read_record, config)
 
 
 # reads OpenAPS device status file
@@ -372,12 +373,8 @@ def is_a_device_status_csv_file(config, patient_id, file_path):
 
 # ------------------------ Read Profile Functions --------------------------- #
 
-def read_all_profile_timezones(config: Configuration) -> dict:
-    read_records = read_all(config, read_profile_from_zip)
-    timezones_dict = {}
-    for rr in read_records:
-        timezones_dict[rr.zip_id] = get_unique_timezones_from_profile(rr)
-    return timezones_dict
+def read_all_profile(config: Configuration):
+    return read_all(config, read_profile_from_zip)
 
 
 def read_profile_from_zip(file_name, config):
@@ -395,16 +392,29 @@ def read_profile_file_to_df(archive, file, read_record, config):
     with archive.open(file, mode='r') as profile_file:
         file_name = TextIOWrapper(profile_file, encoding='utf-8')
         # read the file into a DataFrame
-        df = pd.read_csv(file_name, usecols=['defaultProfile']+tz_cols)
-    return read_record.add(df)
+        try:
+            df = pd.read_csv(file_name,
+                             usecols=['defaultProfile']+tz_cols, dtype=object)
+        except ValueError as e:
+            msg = ("Usecols do not match columns, columns expected but not "
+                   "found: ['defaultProfile']")
+            if str(e) == msg:
+                # If the file is empty, set has_no_files to True
+                print(tz_cols)
+                print(header_cols)
+                file_name.seek(0)  # Reset pointer as left at end with exception
+                df = pd.read_csv(file_name, usecols=tz_cols, dtype=object)
+                df['defaultProfile'] = None
+    read_record.add(df)
+    read_record.utc_offsets = get_unique_timezones_from_profile(read_record)
 
 
 def get_unique_timezones_from_profile(read_record: ReadRecord) -> list:
     df = (read_record.df
           .melt(id_vars=['defaultProfile'], var_name='column_name',
-                 value_name='timezone')
+                 value_name='tz')
           .dropna())
-    return list(df['timezone'].unique())
+    return list(df['tz'].unique())
 
 
 def is_a_profile_csv_file(config, patient_id, file_path):
@@ -417,7 +427,8 @@ def is_a_profile_csv_file(config, patient_id, file_path):
     return startswith and endswith
 
 def timezone_columns(columns):
-    timezone_cols = [col for col in columns if re.search(r"timezone", col)]
+    timezone_cols = \
+        [col for col in columns if re.search(r"timezone", col)]
     return timezone_cols
 
 # -------------------------- Date Parsing Functions -------------------------- #
@@ -439,16 +450,22 @@ def parse_date_columns(treat_timezone,
             parsed_cols = (
                 pd.to_datetime(df_time_cols, format=dt_format, utc=False))
         except ValueError:
-            parsed_cols = (df_time_cols.
-                           apply(lambda x: parse_date_string(treat_timezone, x)))
+            parsed_cols = (
+                df_time_cols.
+                apply(lambda x: parse_date_string(treat_timezone, x)))
     else:
         parsed_cols = pd.DataFrame()
         for col_name in df_time_cols.columns:
             try:
+                # Need to catch future warning as exceptions
+                warnings.filterwarnings("error", category=FutureWarning)
                 parsed_cols[col_name] = pd.to_datetime(df_time_cols[col_name],
                                                        format=dt_format,
                                                        utc=False)
-            except ValueError:
+            except (ValueError, FutureWarning):
+                if FutureWarning and col_name == 'openaps/enacted/datetime':
+                    raise ('The device status time series column '
+                           'openaps/enacted/datetime has multiple timezones.')
                 parsed_cols[col_name] = (
                     df_time_cols[col_name].
                     apply(lambda x: parse_date_string(treat_timezone, x)))
@@ -458,7 +475,8 @@ def parse_date_columns(treat_timezone,
             parsed_cols = parsed_cols.dt.tz_localize(None)
         else:
             for col_name in parsed_cols.columns:
-                parsed_cols[col_name] = parsed_cols[col_name].dt.tz_localize(None)
+                parsed_cols[col_name] = (
+                    parsed_cols[col_name].dt.tz_localize(None))
     elif treat_timezone == 'utc':
         parsed_cols = ensure_utc(parsed_cols)
 

@@ -33,6 +33,10 @@ def main():
     print(f'Completed writing device status flat file in '
           f'{timedelta(seconds=(time.time() - start_time))}')
 
+    # -------------Compare profile file region with datetime timezone-----------
+
+
+
     # ---------------------Write processed irregular file-----------------------
     de_dup_result = dedup_device_status_dataframes(result)
 

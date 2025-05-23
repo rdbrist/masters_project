@@ -3,7 +3,7 @@ from src.data_processing.read import read_all_device_status
 from src.data_processing.write import write_read_record
 import time
 from datetime import timedelta
-from src.config import RAW_DATA_DIR
+from src.config import INTERIM_DATA_DIR
 
 
 def main():
@@ -11,7 +11,7 @@ def main():
     config = Configuration()
 
     as_flat_file = config.as_flat_file
-    folder = RAW_DATA_DIR if as_flat_file else (RAW_DATA_DIR / 'perid')
+    folder = INTERIM_DATA_DIR if as_flat_file else (INTERIM_DATA_DIR / 'perid')
     result = read_all_device_status(config)
     write_read_record(result,
                       as_flat_file,

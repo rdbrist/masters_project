@@ -1,4 +1,5 @@
 from pathlib import Path
+import pandas as pd
 
 from src.data_processing.read import  (read_all_device_status,
                                        read_all_profile_timezones,
@@ -30,3 +31,8 @@ if __name__ == "__main__":
     print_diff = dict_diff(profile_offsets, device_offsets)
     print(f"From {len(profile_timezones)} profiles, and {len(read_device_records)} device status individuals:")
     print(f"Number of differences: {len(print_diff)}")
+
+    profiles_df = pd.DataFrame.from_dict(profile_offsets, orient="index")
+    print()
+    devices_df = pd.DataFrame.from_dict(read_device_records, orient="index")
+

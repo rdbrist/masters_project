@@ -14,6 +14,9 @@ class ResampleDataFrame:
         """
         :param irregular_df : DataFrame: Irregular sampled df
         """
+        if not isinstance(irregular_df, pd.DataFrame):
+            raise TypeError('irregular_df must be a pandas DataFrame')
+
         self.__df = irregular_df.sort_values(by=GeneralisedCols.datetime)
         self.__config = Configuration()
         self.zip_id = self.__df['id'].iloc[0]
