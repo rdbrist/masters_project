@@ -179,7 +179,8 @@ def extract_timezone_offset(read_record, config):
 def convert_timezone_to_utc_offset(tz_val, dt=None):
     """
     Converts an IANA region string or a datetime.timezone to its UTC offset
-    (timedelta). Returns None if input is intz_valid or offset cannot be determined.
+    as integer hours. Returns None if input is intz_valid or offset cannot be
+    determined.
     """
     from datetime import datetime, timezone
     import pytz
@@ -406,16 +407,52 @@ def read_profile_file_to_df(archive, file, read_record, config):
                 df = pd.read_csv(file_name, usecols=tz_cols, dtype=object)
                 df['defaultProfile'] = None
     read_record.add(df)
-    read_record.utc_offsets = get_unique_timezones_from_profile(read_record)
+    df_regions = get_regions_df_from_profile(read_record)
+    read_record.utc_offsets = get_unique_offsets(df_regions)
 
 
-def get_unique_timezones_from_profile(read_record: ReadRecord) -> list:
-    df = (read_record.df
+def get_regions_df_from_profile(read_record: ReadRecord) -> pd.DataFrame:
+    """
+    Creates a DataFrame with the timezone regions from the profile file.
+    :param read_record:
+    :return:
+    """
+    # Get values from timezone columns in the profile dataframe
+    return (read_record.df
           .melt(id_vars=['defaultProfile'], var_name='column_name',
                  value_name='tz')
           .dropna())
-    return list(df['tz'].unique())
 
+def get_unique_offsets(df: pd.DataFrame) -> list:
+    """
+    Extracts unique UTC offsets from a DataFrame containing string timezones
+    from profile files.
+    :param df:
+    :return:
+    """
+    # Convert timezones to UTC offsets
+    df['offset'] = df['tz'].apply(lambda x: convert_timezone_to_utc_offset(x))
+    return list(df['offset'].unique())
+
+def get_all_offsets_df_from_profiles(config: Configuration) -> pd.DataFrame:
+    """
+    Returns a dictionary of the different UTC offsets for each individual,
+    based on the timezone columns in profile files that come in string format,
+    mostly conforming toe IANA standard string.
+    trings.
+    :param config: Configuration
+    :return: df of all UTC offsets, with columns 'id', 'tz', 'offset'
+    """
+    profile_read_recs = read_all_profile(config)
+    df_profile_offsets = pd.DataFrame()
+    for rr in profile_read_recs:
+        df = get_regions_df_from_profile(rr)
+        df = df.drop(columns='column_name').drop_duplicates()
+        df['offset'] = (df['tz']
+                        .apply(lambda x: convert_timezone_to_utc_offset(x)))
+        df['id'] = rr.zip_id
+        df_profile_offsets = pd.concat([df_profile_offsets, df])
+    return df_profile_offsets
 
 def is_a_profile_csv_file(config, patient_id, file_path):
     # file starts with patient id and _entries

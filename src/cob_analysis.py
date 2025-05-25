@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 from sklearn.preprocessing import StandardScaler
 from loguru import logger
+from datetime import timedelta
 
 from scipy.signal import find_peaks
 from src.config import INTERIM_DATA_DIR
@@ -31,6 +32,7 @@ class Cob:
         self.individual_dataset = None
         self.processed_dataset = None
         self.sampling_rate = 15  # minutes, default
+        self.offset_processed = False
 
     def dataset_is_loaded(self):
         if self.dataset is None:
@@ -487,11 +489,14 @@ class Cob:
         self.individual_dataset = None
         self.interpolated = None
 
+        ignored = 0
         for p_id in ids:
             if not suppress:
                 print('Processing ID:', p_id)
             if p_id not in self.dataset.index.get_level_values('id').values:
-                raise ValueError(f'Individual {p_id} not found in dataset')
+                print(f'Individual {p_id} not found in dataset, ignoring.')
+                ignored += 1
+                continue
             self.individual_dataset = self.get_person_data(p_id)
             self.individual_dataset = self._interpolate_data()
             self.individual_dataset = (
@@ -515,13 +520,19 @@ class Cob:
                               'processed_cob_data.parquet')
 
         if not suppress:
-            print(f'Number of people processed: {len(ids)}')
+            if ignored > 0:
+                print(
+                    f'From {len(ids)}, ignored {ignored} individuals not found '
+                    f'in dataset, leaving {len(ids) - ignored} processed '
+                    f'records.')
             print(f'The following stats are based on parameters h={height} and '
                   f'd={distance}:')
             print(f'\tNumber of records: {len(df_all)}')
             print(f'\tNumber of days with peaks: '
                   f'{len(df_all["day"].drop_duplicates())}')
             print(f'\tNumber of peaks: {df_all["peak"].sum()}')
+
+        self.offset_processed = False
 
         return df_all
 
@@ -601,6 +612,33 @@ class Cob:
         df = df.groupby('time').agg({'peak': 'sum'}).reset_index()
 
         return df
+
+    def process_one_tz_individuals(self, profile_offsets: pd.DataFrame,
+                                   *kwargs) -> pd.DataFrame:
+        """
+        Process the dataset for one timezone individuals, adjusting the datetime
+        given the offsets provided in the profile_offsets DataFrame. This df
+        should have 'id' and 'offset' columns, where 'offset' is the number of
+        hours from UTC. It will also check if the offsets have already been
+        processed, and if so, will return the existing dataset.
+        :param profile_offsets: Dataframe with 'id' and 'offset' columns
+        :param kwargs: Keyword arguments for pre_process_batch method
+        :return: Datafrome: Processed dataset with adjusted datetime
+        """
+        if self.offset_processed:
+            print('Offset already processed. Returning existing dataset.')
+            return self.dataset
+        if profile_offsets['id'].duplicated().any():
+            raise ValueError("Profile offsets DataFrame contains duplicate IDs."
+                             " Please ensure each ID is unique such that only"
+                             " one offset exists.")
+        zip_ids = profile_offsets['id'].unique()
+        self.pre_process_batch(ids=zip_ids, *kwargs)
+        self.dataset['offset'] = self.dataset.index.map(profile_offsets['offset'])
+        self.dataset['datetime'] = self.dataset['datetime'] + self.dataset[
+            'offset'].apply(lambda h: timedelta(hours=h))
+        self.offset_processed = True
+        return self.dataset
 
 def _return_peaks(df):
     pass
@@ -698,6 +736,6 @@ def hierarchical_clustering(summary_df: pd.DataFrame, feature_cols: list = None)
     plt.suptitle('Pairplot of Features by Cluster', y=1.02)
     plt.show()
 
-
     return summary_df
+
 
