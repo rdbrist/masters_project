@@ -1,6 +1,7 @@
 from src.configurations import (Configuration,
                                 Irregular, FifteenMinute, FiveMinute)
-from src.data_processing.read import read_all_device_status
+from src.data_processing.read import (read_all_device_status,
+                                      get_all_offsets_df_from_profiles)
 from src.data_processing.write import write_read_record
 from src.data_processing.format import as_flat_dataframe
 from src.data_processing.preprocess import dedup_device_status_dataframes
@@ -32,10 +33,6 @@ def main():
                       file_type='parquet')
     print(f'Completed writing device status flat file in '
           f'{timedelta(seconds=(time.time() - start_time))}')
-
-    # -------------Compare profile file region with datetime timezone-----------
-
-
 
     # ---------------------Write processed irregular file-----------------------
     de_dup_result = dedup_device_status_dataframes(result)
@@ -77,6 +74,17 @@ def main():
 
     print(f'Completed writing resampled flat file(s) in '
           f'{timedelta(seconds=(time.time() - start_time))}')
+
+    # ----------------Adjust datetimes by offsets to localise times-------------
+
+    # Get offsets from profiles - limited to individuals with one timezone
+    profile_offsets = get_all_offsets_df_from_profiles(config)
+    one_tz_individuals = profile_offsets[
+        ~profile_offsets['utc_offsets'].duplicated(keep=False) &
+        profile_offsets['utc_offsets'].notnull()]
+
+    # Adjust datetimes in the resampled DataFrames
+
 
 if __name__ == "__main__":
     main()

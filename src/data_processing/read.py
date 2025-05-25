@@ -425,33 +425,41 @@ def get_regions_df_from_profile(read_record: ReadRecord) -> pd.DataFrame:
 
 def get_unique_offsets(df: pd.DataFrame) -> list:
     """
-    Extracts unique UTC offsets from a DataFrame containing string timezones
-    from profile files.
-    :param df:
-    :return:
+    Converts timezones to UTC offsets from a DataFrame containing string
+    timezones from profile files.
+    :param df: DataFrame with a 'tz' column containing timezones
+    :return: DataFrame of unique UTC offsets
     """
     # Convert timezones to UTC offsets
     df['offset'] = df['tz'].apply(lambda x: convert_timezone_to_utc_offset(x))
     return list(df['offset'].unique())
 
+
 def get_all_offsets_df_from_profiles(config: Configuration) -> pd.DataFrame:
     """
-    Returns a dictionary of the different UTC offsets for each individual,
+    Returns a dataframe of the different UTC offsets for each individual,
     based on the timezone columns in profile files that come in string format,
-    mostly conforming toe IANA standard string.
-    trings.
+    mostly conforming to IANA standard string.
     :param config: Configuration
-    :return: df of all UTC offsets, with columns 'id', 'tz', 'offset'
+    :return: Dataframe of all UTC offsets, with columns 'id', 'tz', 'offset',
+    not indexed.
     """
     profile_read_recs = read_all_profile(config)
     df_profile_offsets = pd.DataFrame()
     for rr in profile_read_recs:
-        df = get_regions_df_from_profile(rr)
+        try:
+            df = get_regions_df_from_profile(rr)
+        except AttributeError as e:
+            logging.info(f'ID {rr.zip_id}: Could not read profile file: {e}')
+            continue
         df = df.drop(columns='column_name').drop_duplicates()
         df['offset'] = (df['tz']
                         .apply(lambda x: convert_timezone_to_utc_offset(x)))
-        df['id'] = rr.zip_id
+        df['id'] = int(rr.zip_id)
         df_profile_offsets = pd.concat([df_profile_offsets, df])
+    df_profile_offsets = (df_profile_offsets.
+                          drop(columns=['defaultProfile', 'tz']).
+                          drop_duplicates())
     return df_profile_offsets
 
 def is_a_profile_csv_file(config, patient_id, file_path):

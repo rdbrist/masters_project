@@ -614,31 +614,45 @@ class Cob:
         return df
 
     def process_one_tz_individuals(self, profile_offsets: pd.DataFrame,
-                                   *kwargs) -> pd.DataFrame:
+                                   args: dict) -> pd.DataFrame:
         """
         Process the dataset for one timezone individuals, adjusting the datetime
         given the offsets provided in the profile_offsets DataFrame. This df
         should have 'id' and 'offset' columns, where 'offset' is the number of
-        hours from UTC. It will also check if the offsets have already been
-        processed, and if so, will return the existing dataset.
+        hours from UTC and 'id' as index. It will also check if the offsets have
+        already been processed, and if so, will return the existing dataset.
         :param profile_offsets: Dataframe with 'id' and 'offset' columns
-        :param kwargs: Keyword arguments for pre_process_batch method
+        :param args: Keyword arguments for pre_process_batch method
         :return: Datafrome: Processed dataset with adjusted datetime
         """
         if self.offset_processed:
-            print('Offset already processed. Returning existing dataset.')
-            return self.dataset
-        if profile_offsets['id'].duplicated().any():
+            print('Offset already processed. Returning existing processed_dataset.')
+            return self.processed_dataset
+        if profile_offsets.index.duplicated().any():
             raise ValueError("Profile offsets DataFrame contains duplicate IDs."
                              " Please ensure each ID is unique such that only"
                              " one offset exists.")
-        zip_ids = profile_offsets['id'].unique()
-        self.pre_process_batch(ids=zip_ids, *kwargs)
-        self.dataset['offset'] = self.dataset.index.map(profile_offsets['offset'])
-        self.dataset['datetime'] = self.dataset['datetime'] + self.dataset[
+        zip_ids = profile_offsets.index.unique()
+        self.pre_process_batch(ids=zip_ids, **args)
+
+        # Check for missing ids before mapping
+        missing_ids = set(self.processed_dataset.index.get_level_values('id')) - set(
+            profile_offsets.index)
+        if missing_ids:
+            raise ValueError(f"IDs missing in profile_offsets: {missing_ids}")
+
+        self.processed_dataset['offset'] = (self.processed_dataset.index.get_level_values('id').
+                                  map(profile_offsets['offset']))
+        self.processed_dataset = self.processed_dataset.reset_index()
+        self.processed_dataset['datetime'] = self.processed_dataset['datetime'] + self.processed_dataset[
             'offset'].apply(lambda h: timedelta(hours=h))
+        self.processed_dataset['date'] = self.processed_dataset['datetime'].dt.date
+        self.processed_dataset['time'] = self.processed_dataset['datetime'].dt.time
+        self.processed_dataset = (self.processed_dataset.
+                        set_index(['id', 'datetime']).
+                        sort_index())
         self.offset_processed = True
-        return self.dataset
+        return self.processed_dataset
 
 def _return_peaks(df):
     pass
