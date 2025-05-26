@@ -52,5 +52,6 @@ def preprocessed_file_for(folder, zip_id: str, sampling: Resampling):
     files_matching_name = list(filter(lambda x: name in x, files))
     return Path(files_matching_name[0]) if files_matching_name else None
 
+
 def flat_preprocessed_file_for(folder, sampling: Resampling):
     return Path(folder / sampling.csv_file_name())

@@ -39,7 +39,7 @@ class Cob:
             print("Dataset not loaded. Please run read_interim_data() first.")
             return False
         return True
-    
+
     def set_parameters(self, height: int, distance: int):
         """
         Set the parameters for the find_peaks function.
@@ -173,7 +173,7 @@ class Cob:
             raise KeyError(f'Individual {p_id} not found in dataset.')
 
         if 'cob max' not in df.columns:
-            raise ValueError(f'Column "cob max" not found in dataset.')
+            raise ValueError('Column "cob max" not found in dataset.')
 
         # Trim leading and trailing NaNs from the individual dataset
         first_valid_index = df.first_valid_index()
@@ -235,8 +235,8 @@ class Cob:
         return peak_indices, properties
 
     def identify_peaks_for_individual(self, height: int = None,
-                       distance: int = None,
-                       suppress: bool = False):
+                                      distance: int = None,
+                                      suppress: bool = False):
         """
         Identify peaks in the individual dataset using the find_peaks function
         from scipy.signal.
@@ -357,7 +357,7 @@ class Cob:
             print(f'Days with missing data: {days_in_range - days_count:.2f}')
             print(f'Number of gaps: {num_gaps}')
             print(f'Mean length of gaps (in days): {mean_gap_length:.2f}\n')
-        
+
         stats = {
             'n': n,
             'nans': nans,
@@ -398,7 +398,8 @@ class Cob:
         for p_id in self.dataset.index.get_level_values('id').drop_duplicates():
             self.get_person_data(p_id)
             summary_dict = self.summarise_missing_for_individual(suppress=True)
-            individual_df = pd.DataFrame.from_dict(summary_dict, orient='index').T
+            individual_df = (pd.DataFrame.
+                             from_dict(summary_dict, orient='index').T)
             individual_df['id'] = int(p_id)
             summary_df = pd.concat([summary_df, individual_df])
 
@@ -408,7 +409,8 @@ class Cob:
                        .sum()
                        .reset_index())
 
-        # Aggregate per individual: total peaks, average peaks per day, number of days
+        # Aggregate per individual: total peaks, average peaks per day, number
+        # of days
         df_peaks = (daily_peaks
                     .groupby('id')
                     .agg(num_peaks=('peak', 'sum'),
@@ -429,7 +431,7 @@ class Cob:
         date_cols = ['min_date', 'max_date']
         numeric_cols = summary_df.columns.difference(date_cols)
         summary_df[numeric_cols] = (summary_df[numeric_cols].
-                                    apply(pd.to_numeric,errors='coerce').
+                                    apply(pd.to_numeric, errors='coerce').
                                     fillna(0))
 
         fig, ax = plt.subplots(figsize=(8, 4))
@@ -458,7 +460,8 @@ class Cob:
             print(f'Variable {variable} not found in DataFrame.')
             return
         if df['peak'].isnull().all():
-            print("No peaks identified. Please run identify_peaks_for_individual() first.")
+            print("No peaks identified. Please run "
+                  "identify_peaks_for_individual() first.")
             return
         fig, ax = plt.subplots(figsize=(16, 4))
         sns.lineplot(df[variable], ax=ax)
@@ -480,8 +483,8 @@ class Cob:
         :param height: (int) Height parameter for find_peaks function
         :param distance: (int) Distance parameter for find_peaks function
         :param suppress: (bool) Suppress output messages if True
-        :return: df_cob (pd.DataFrame) DataFrame containing pre-processed COB data
-            for the batch of individuals
+        :return: df_cob (pd.DataFrame) DataFrame containing pre-processed COB
+            data for the batch of individuals
         """
         all_ids = (self.dataset.
                    index.get_level_values('id').
@@ -503,7 +506,7 @@ class Cob:
                 print('Processing ID:', p_id)
             if p_id not in self.dataset.index.get_level_values('id').values:
                 logger.info(f'Individual {p_id} not found in dataset, '
-                             f'ignoring.')
+                            f'ignoring.')
                 ignored += 1
                 continue
             self.individual_dataset = self.get_person_data(p_id)
@@ -635,7 +638,8 @@ class Cob:
         :return: Datafrome: Processed dataset with adjusted datetime
         """
         if self.offset_processed:
-            print('Offset already processed. Returning existing processed_dataset.')
+            print('Offset already processed. Returning existing '
+                  'processed_dataset.')
             return self.processed_dataset
         if profile_offsets.index.duplicated().any():
             raise ValueError("Profile offsets DataFrame contains duplicate IDs."
@@ -645,26 +649,35 @@ class Cob:
         self.pre_process_batch(ids=zip_ids, **args)
 
         # Check for missing ids before mapping
-        missing_ids = set(self.processed_dataset.index.get_level_values('id')) - set(
-            profile_offsets.index)
+        missing_ids = (
+                set(self.processed_dataset.index.get_level_values('id')) -
+                set(profile_offsets.index))
         if missing_ids:
             raise ValueError(f"IDs missing in profile_offsets: {missing_ids}")
 
-        self.processed_dataset['offset'] = (self.processed_dataset.index.get_level_values('id').
-                                  map(profile_offsets['offset']))
+        self.processed_dataset['offset'] = (
+            self.processed_dataset.
+            index.get_level_values('id').
+            map(profile_offsets['offset']))
         self.processed_dataset = self.processed_dataset.reset_index()
-        self.processed_dataset['datetime'] = self.processed_dataset['datetime'] + self.processed_dataset[
-            'offset'].apply(lambda h: timedelta(hours=h))
-        self.processed_dataset['date'] = self.processed_dataset['datetime'].dt.date
-        self.processed_dataset['time'] = self.processed_dataset['datetime'].dt.time
+        self.processed_dataset['datetime'] = (
+                self.processed_dataset['datetime'] +
+                self.processed_dataset['offset'].
+                apply(lambda h: timedelta(hours=h)))
+        self.processed_dataset['date'] = (
+            self.processed_dataset['datetime'].dt.date)
+        self.processed_dataset['time'] = (
+            self.processed_dataset['datetime'].dt.time)
         self.processed_dataset = (self.processed_dataset.
-                        set_index(['id', 'datetime']).
-                        sort_index())
+                                  set_index(['id', 'datetime']).
+                                  sort_index())
         self.offset_processed = True
         return self.processed_dataset
 
+
 def _return_peaks(df):
     pass
+
 
 def plot_by_hour_individuals(df):
     """
@@ -707,7 +720,7 @@ def hierarchical_clustering(summary_df: pd.DataFrame,
     """
     Perform hierarchical clustering on the summary DataFrame and displays a
     dendrogram of the hierarchical clustering.
-    :param summary_df: (pd.DataFrame) DataFrame containing summary statistics 
+    :param summary_df: (pd.DataFrame) DataFrame containing summary statistics
         with 'id' as index
     :param feature_cols: (list) List of features to use for clustering. If None,
     :return: (pd.DataFrame) DataFrame with clusters assigned to each individual.
@@ -716,7 +729,6 @@ def hierarchical_clustering(summary_df: pd.DataFrame,
     # Ensure the DataFrame is indexed by 'id'
     if summary_df.index.name != 'id':
         raise ValueError("The DataFrame must contain an 'id' column.")
-
 
     if feature_cols is None:
         feature_cols = ['days_with_data', 'num_peaks', 'missing_percent']
@@ -737,7 +749,10 @@ def hierarchical_clustering(summary_df: pd.DataFrame,
 
     # Plot dendrogram
     plt.figure(figsize=(8, 6))
-    dendrogram(z, labels=summary_df.index.astype(int).astype(str), leaf_rotation=90, truncate_mode='level', p=4)
+    dendrogram(z, labels=summary_df.index.astype(int).astype(str),
+               leaf_rotation=90,
+               truncate_mode='level',
+               p=4)
     plt.title('Hierarchical Clustering Dendrogram of Individuals')
     plt.xlabel('Individual (zip_id)')
     plt.ylabel('Distance')
@@ -762,5 +777,3 @@ def hierarchical_clustering(summary_df: pd.DataFrame,
     plt.show()
 
     return summary_df
-
-

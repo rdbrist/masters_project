@@ -7,7 +7,7 @@ import time
 
 from src.configurations import (Configuration, Irregular, Daily, Hourly,
                                 FifteenMinute, FiveMinute, GeneralisedCols)
-from src.helper import preprocessed_file_for, flat_preprocessed_file_for
+from src.helper import preprocessed_file_for
 from src.data_processing.read_preprocessed_df import ReadPreprocessedDataFrame
 from src.data_processing.resampling import ResampleDataFrame
 from src.config import INTERIM_DATA_DIR

@@ -208,7 +208,9 @@ class Configuration:
 
     # Output filename definitions
     device_status_prefix = 'device_status_df'
-    tz_suffix_dict = {'keep': '_tz_aware', 'utc': '_tz_utc', 'localise': '_tz_naive'}
+    tz_suffix_dict = {'keep': '_tz_aware',
+                      'utc': '_tz_utc',
+                      'localise': '_tz_naive'}
     tz_suffix = tz_suffix_dict[treat_timezone]
     device_file_prefix = device_status_prefix + tz_suffix
 
@@ -301,9 +303,9 @@ class Configuration:
         device_status_cols_a = \
             [k for k in self.device_status_col_type.keys()
              if 'time' in str(k).lower()]
-        device_status_cols_b =  ['created_at',
-                                 'openaps/enacted/deliverAt',
-                                 'pump/clock']
+        device_status_cols_b = ['created_at',
+                                'openaps/enacted/deliverAt',
+                                'pump/clock']
         entries_col = ['time']
         return (profile_col + device_status_cols_a +
                 device_status_cols_b + entries_col)

@@ -135,7 +135,7 @@ def read_zip_file(config,
             # skip files that are zero size, but log them
             if info.file_size == 0:
                 logger.info('Found empty file: ' + file +
-                             ' for id: ' + read_record.zip_id)
+                            ' for id: ' + read_record.zip_id)
                 continue
 
             # read entries into pandas dataframe
@@ -164,10 +164,12 @@ def extract_timezone_offset(read_record, config):
     df = (read_record.df[time_cols].
           melt(var_name='column', value_name='datetime'))
     # Extract timezone from each value individually
+
     def get_tz(val):
         if isinstance(val, pd.Timestamp) or isinstance(val, datetime):
             return val.tzinfo
         return None
+
     if pd.api.types.is_datetime64_any_dtype(df['datetime']):
         df['timezone'] = df['datetime'].dt.tz
     df['timezone'] = df['datetime'].apply(get_tz)
@@ -195,7 +197,7 @@ def convert_timezone_to_utc_offset(tz_val, dt=None):
         try:
             tz = pytz.timezone(tz_val)
             if dt is None:
-                dt = datetime.now(timezone.utc).replace(tzinfo=None)  # naive UTC
+                dt = datetime.now(timezone.utc).replace(tzinfo=None)
             elif dt.tzinfo is not None:
                 # Convert aware datetime to naive UTC
                 dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
@@ -278,8 +280,7 @@ def is_a_bg_csv_file(config, patient_id, file_path):
     return startswith and endswith
 
 
-#-------------------------- Read Device Status File ---------------------------#
-
+# ------------------------- Read Device Status File ----------------------------
 # reads flat device data csv and does preprocessing
 # allows path for file to read
 def read_flat_device_status_df_from_file(file: Path, config: Configuration):
@@ -341,7 +342,6 @@ def read_device_status_file_into_df(archive, file, read_record, config):
             io_wrapper = TextIOWrapper(file_context, encoding="utf-8")
             df = pd.read_csv(io_wrapper)
     read_record.add(df)
-   # read_record.utc_offsets = extract_timezone_offset(read_record, config)
 
 
 # reads OpenAPS device status file
@@ -417,9 +417,11 @@ def get_regions_df_from_profile(read_record: ReadRecord) -> pd.DataFrame:
     """
     # Get values from timezone columns in the profile dataframe
     return (read_record.df
-          .melt(id_vars=['defaultProfile'], var_name='column_name',
-                 value_name='tz')
-          .dropna())
+            .melt(id_vars=['defaultProfile'],
+                  var_name='column_name',
+                  value_name='tz')
+            .dropna())
+
 
 def get_unique_offsets(df: pd.DataFrame) -> list:
     """
@@ -460,6 +462,7 @@ def get_all_offsets_df_from_profiles(config: Configuration) -> pd.DataFrame:
                           drop_duplicates())
     return df_profile_offsets
 
+
 def is_a_profile_csv_file(config, patient_id, file_path):
     # file starts with patient id and _entries
     start_string = patient_id + config.profile_csv_file_start
@@ -469,10 +472,12 @@ def is_a_profile_csv_file(config, patient_id, file_path):
     endswith = file_path.endswith(config.csv_extension)
     return startswith and endswith
 
+
 def timezone_columns(columns):
     timezone_cols = \
         [col for col in columns if re.search(r"timezone", col)]
     return timezone_cols
+
 
 # -------------------------- Date Parsing Functions -------------------------- #
 def parse_date_columns(treat_timezone,

@@ -40,8 +40,8 @@ class ResampleDataFrame:
                     try:
                         df.loc[:, col] = df[col].apply(self.__round_numbers)
                     except FutureWarning as e:
-                        print(f'Error occurred for person {self.zip_id} in column {col}:\n'
-                              f'{e}')
+                        print(f'Error occurred for person {self.zip_id} '
+                              f'in column {col}:\n{e}')
             return df
 
         # resample by value column to avoid resampling over missing values in
@@ -71,10 +71,10 @@ class ResampleDataFrame:
                         groupby(
                             by=sub_df[gencols.datetime].
                             dt.date, group_keys=True).
-                        apply(lambda x: x[gencols.datetime].
-                              diff().
-                              astype('timedelta64[s]') /
-                                    pd.Timedelta(seconds=60))
+                        apply(
+                            lambda x: x[gencols.datetime].diff().
+                            astype('timedelta64[s]') /
+                            pd.Timedelta(seconds=60))
                     )
                 sub_df['diff'] = result.reset_index(level=0, drop=True)
                 # days with bigger gaps than max
@@ -83,7 +83,7 @@ class ResampleDataFrame:
                     [gencols.datetime].dt.date)
                 df_right_max_gaps = (
                     sub_df[~sub_df[gencols.datetime].
-                        dt.date.isin(bigger_gaps_dates)]
+                           dt.date.isin(bigger_gaps_dates)]
                 )
 
                 # For each date left we need to calculate the gap between

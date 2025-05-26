@@ -89,9 +89,12 @@ def main():
 
     # Adjust datetimes in the resampled DataFrames
     cob_fifteen = Cob()
-    cob_fifteen.read_interim_data(file_name='15min_iob_cob_bg', file_type='parquet')
+    cob_fifteen.read_interim_data(file_name='15min_iob_cob_bg',
+                                  file_type='parquet')
     args = {'height': 15, 'distance': 5, 'suppress': True}
     df_cob = cob_fifteen.process_one_tz_individuals(profile_offsets, args)
+    df_cob.head()
+
 
 if __name__ == "__main__":
     main()
