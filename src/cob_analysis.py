@@ -273,9 +273,9 @@ class Cob:
                                           distance=d)
         df_cob['peak'] = 0
         df_cob.loc[df_cob.index[peaks], 'peak'] = 1
-        if not suppress:
-            print(f'\n{len(peaks)} peaks identified using parameters h={h} and '
-                  f'd={d}, and added to individual_dataset as a new column.')
+        logger.info(f'\n{len(peaks)} peaks identified using parameters h={h} '
+                    f'and d={d}, and added to individual_dataset as a new '
+                    f'column.')
 
         self.individual_dataset = df_cob
 
@@ -502,8 +502,7 @@ class Cob:
 
         ignored = 0
         for p_id in ids:
-            if not suppress:
-                print('Processing ID:', p_id)
+            logger.info('Processing ID:', p_id)
             if p_id not in self.dataset.index.get_level_values('id').values:
                 logger.info(f'Individual {p_id} not found in dataset, '
                             f'ignoring.')
@@ -604,10 +603,11 @@ class Cob:
         days = df_cob['day'].drop_duplicates()
         if not suppress:
             if len(zero_data_days) > 0:
-                print(f'For ID {self.individual}: {len(zero_data_days)}'
-                      f' days with no peaks removed, {len(days)} remain.')
+                logger.info(f'For ID {self.individual}: {len(zero_data_days)}'
+                            f' days with no peaks removed, {len(days)} remain.')
             else:
-                print('No days with zero peaks found.')
+                logger.info(f'For ID {self.individual}: No days with zero '
+                            f'peaks found.')
 
         return df_cob, df_agg_by_day
 

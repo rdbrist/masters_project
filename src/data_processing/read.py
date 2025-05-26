@@ -462,6 +462,21 @@ def get_all_offsets_df_from_profiles(config: Configuration) -> pd.DataFrame:
                           drop_duplicates())
     return df_profile_offsets
 
+def read_profile_offsets_csv(config: Configuration) -> pd.DataFrame:
+    """
+    Reads the profile offsets CSV file and returns a DataFrame.
+    :param config: Configuration object containing the path to the CSV file.
+    :return: DataFrame with profile offsets.
+    """
+    try:
+        df = pd.read_csv(config.profile_offsets_csv_file,
+                         usecols=['id', 'offset'],
+                         dtype=int).set_index('id')
+        return df
+    except FileNotFoundError:
+        logger.error(f'Profile offsets CSV file not found: '
+                     f'{config.profile_offsets_csv_file}')
+        return pd.DataFrame()
 
 def is_a_profile_csv_file(config, patient_id, file_path):
     # file starts with patient id and _entries

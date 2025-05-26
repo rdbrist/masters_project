@@ -229,6 +229,7 @@ class Configuration:
             INTERIM_DATA_DIR / dedup_flat_device_status_csv_file_name)
     dedup_flat_device_status_parquet_file = (
             INTERIM_DATA_DIR / dedup_flat_device_status_parquet_file_name)
+    profile_offsets_csv_file = (INTERIM_DATA_DIR / 'profile_offsets.csv')
 
     # columns to keep
     # TODO use generalised cols instead
