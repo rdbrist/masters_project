@@ -45,7 +45,6 @@ class Cob:
         Set the parameters for the find_peaks function.
         :param height: minimum height of peaks
         :param distance: minimum distance between peaks
-        :return:
         """
         self.height = height
         self.distance = distance
@@ -246,6 +245,8 @@ class Cob:
         :param distance: (int) Distance parameter for find_peaks function. If
             not provided, will use the stored value.
         :param suppress: (bool) Suppress output messages if True
+        :return: DataFrame: DataFrame with peaks identified, added as a new
+            column 'peak' with 1 for peaks and 0 otherwise.
         """
 
         # Establish the dataframe to use
@@ -304,6 +305,9 @@ class Cob:
         Summarise missing data in the individual dataset, including basic
         statistics and identifying date ranges with missing data.
         Based on the cob max by default and not interpolated data.
+        :param variable: (str) Variable to summarise, default is 'cob max'
+        :param suppress: (bool) Suppress output messages if True
+        :return: dict: Dictionary containing summary statistics of missing data
         """
         if self.individual_dataset is None:
             print("No individual dataset available. Please run "
@@ -442,10 +446,8 @@ class Cob:
         """
         Plot the COB data with peaks identified. Default is to use the
         interpolated data.
-
-        Parameters:
-            title (str): Title for the plot
-            variable (str): Variable to plot. Default is 'cob interpolate'.
+        :param title: (str) Title for the plot
+        :param variable: (str) Variable to plot. Default is 'cob interpolate'.
         """
         df = self.individual_dataset.copy()
         if df is None:
@@ -474,15 +476,11 @@ class Cob:
         """
         Pre-processes the data for a batch of individuals, including
         interpolating missing values and identifying peaks.
-
-        Parameters:
-            ids (list): List of individual IDs
-            height (int): Height parameter for find_peaks function
-            distance (int): Distance parameter for find_peaks function
-            suppress (bool): Suppress output messages if True
-
-        Returns:
-            df_cob (pd.DataFrame): DataFrame containing pre-processed COB data
+        :param ids: (list) List of individual IDs
+        :param height: (int) Height parameter for find_peaks function
+        :param distance: (int) Distance parameter for find_peaks function
+        :param suppress: (bool) Suppress output messages if True
+        :return: df_cob (pd.DataFrame) DataFrame containing pre-processed COB data
             for the batch of individuals
         """
         all_ids = (self.dataset.

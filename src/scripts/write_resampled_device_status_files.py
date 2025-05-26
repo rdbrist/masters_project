@@ -12,6 +12,7 @@ from src.data_processing.read_preprocessed_df import ReadPreprocessedDataFrame
 from src.data_processing.resampling import ResampleDataFrame
 from src.config import INTERIM_DATA_DIR
 
+
 def resample_irregular_flat_file(flat_file_path, output_folder):
     daily = Daily()
     hourly = Hourly()
@@ -33,7 +34,8 @@ def resample_irregular_flat_file(flat_file_path, output_folder):
         resampler = ResampleDataFrame(group)
         resampled_dfs['daily'].append(resampler.resample_to(daily))
         resampled_dfs['hourly'].append(resampler.resample_to(hourly))
-        resampled_dfs['fifteen_minute'].append(resampler.resample_to(fifteen_minute))
+        resampled_dfs['fifteen_minute'].append(resampler.
+                                               resample_to(fifteen_minute))
         resampled_dfs['five_minute'].append(resampler.resample_to(five_minute))
 
     # Concatenate and write each resampled DataFrame
@@ -46,6 +48,7 @@ def resample_irregular_flat_file(flat_file_path, output_folder):
         Path(output_folder, fifteen_minute.csv_file_name()), index=False)
     pd.concat(resampled_dfs['five_minute']).reset_index(drop=True).to_csv(
         Path(output_folder, five_minute.csv_file_name()), index=False)
+
 
 def main():
     start_time = time.time()

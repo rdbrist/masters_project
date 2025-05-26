@@ -1,3 +1,7 @@
+import time
+import pandas as pd
+from datetime import timedelta
+
 from src.configurations import (Configuration,
                                 Irregular, FifteenMinute, FiveMinute)
 from src.data_processing.read import (read_all_device_status,
@@ -6,10 +10,8 @@ from src.data_processing.write import write_read_record
 from src.data_processing.format import as_flat_dataframe
 from src.data_processing.preprocess import dedup_device_status_dataframes
 from src.data_processing.resampling import ResampleDataFrame
-from src.config import RAW_DATA_DIR, INTERIM_DATA_DIR
-import time
-import pandas as pd
-from datetime import timedelta
+from src.config import INTERIM_DATA_DIR
+from src.cob_analysis import Cob
 
 
 def main():
@@ -79,12 +81,17 @@ def main():
 
     # Get offsets from profiles - limited to individuals with one timezone
     profile_offsets = get_all_offsets_df_from_profiles(config)
-    one_tz_individuals = profile_offsets[
-        ~profile_offsets['utc_offsets'].duplicated(keep=False) &
-        profile_offsets['utc_offsets'].notnull()]
+    profile_offsets = (profile_offsets[
+                           ~profile_offsets['id'].duplicated(keep=False) &
+                           profile_offsets['offset'].notnull()].
+                       set_index('id'))
+    profile_offsets.to_csv(INTERIM_DATA_DIR / 'profile_offsets.csv')
 
     # Adjust datetimes in the resampled DataFrames
-
+    cob_fifteen = Cob()
+    cob_fifteen.read_interim_data(file_name='15min_iob_cob_bg', file_type='parquet')
+    args = {'height': 15, 'distance': 5, 'suppress': True}
+    df_cob = cob_fifteen.process_one_tz_individuals(profile_offsets, args)
 
 if __name__ == "__main__":
     main()
