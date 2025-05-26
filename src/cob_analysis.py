@@ -371,7 +371,7 @@ class Cob:
         }
         return stats
 
-    def summarise_missing_for_dataset(self):
+    def summarise_missing_for_dataset(self, limit_to_processed: bool = False):
         """
         Summarise missing data across the whole dataset, including basic
         statistics and identifying date ranges with missing data. Also
@@ -380,13 +380,14 @@ class Cob:
         :return: DataFrame: DataFrame containing missing data summary for each
         """
         if not self.dataset_is_loaded():
-            return
+            raise (ValueError, 'Dataset not loaded. Please run '
+                               'read_interim_data() first.')
 
         if self.processed_dataset is None:
-            print('Wanting to summarise the peak data but this is not yet '
-                  'processed. Please run pre_process_batch() first without '
-                  'specifying a dataset. This will process all by default.')
-            return
+            raise (ValueError, 'Wanting to summarise the peak data but this is '
+                               'not yet processed. Please run '
+                               'pre_process_batch() first without specifying a '
+                               'dataset. This will process all by default.')
 
         summary_df = pd.DataFrame()
 
@@ -412,6 +413,15 @@ class Cob:
         df_peaks.index = df_peaks.index.astype(int)
 
         summary_df = summary_df.set_index('id').join(df_peaks)
+
+        # Limit to processed dataset individuals if required
+        if limit_to_processed:
+            processed_ids = (self.processed_dataset.
+                             index.
+                             get_level_values('id').
+                             drop_duplicates())
+            summary_df = summary_df.loc[processed_ids]
+
         date_cols = ['min_date', 'max_date']
         numeric_cols = summary_df.columns.difference(date_cols)
         summary_df[numeric_cols] = (summary_df[numeric_cols].
@@ -494,7 +504,8 @@ class Cob:
             if not suppress:
                 print('Processing ID:', p_id)
             if p_id not in self.dataset.index.get_level_values('id').values:
-                print(f'Individual {p_id} not found in dataset, ignoring.')
+                logger.info(f'Individual {p_id} not found in dataset, '
+                             f'ignoring.')
                 ignored += 1
                 continue
             self.individual_dataset = self.get_person_data(p_id)
@@ -693,13 +704,15 @@ def plot_cob_by_hour(df):
     plt.show()
 
 
-def hierarchical_clustering(summary_df: pd.DataFrame, feature_cols: list = None) -> pd.DataFrame:
+def hierarchical_clustering(summary_df: pd.DataFrame,
+                            feature_cols: list = None) -> pd.DataFrame:
     """
-    Perform hierarchical clustering on the summary DataFrame.
+    Perform hierarchical clustering on the summary DataFrame and displays a
+    dendrogram of the hierarchical clustering.
     :param summary_df: (pd.DataFrame) DataFrame containing summary statistics 
-    with 'id' as index.
-    :param features: (list) List of features to use for clustering. If None,
-    :return None: Displays a dendrogram of the hierarchical clustering.
+        with 'id' as index
+    :param feature_cols: (list) List of features to use for clustering. If None,
+    :return: (pd.DataFrame) DataFrame with clusters assigned to each individual.
     """
 
     # Ensure the DataFrame is indexed by 'id'

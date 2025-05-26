@@ -4,11 +4,11 @@ import zipfile
 from dataclasses import dataclass
 from io import TextIOWrapper
 from pathlib import Path
-import logging
 import pandas as pd
 import re
 import warnings
 from datetime import datetime
+from loguru import logger
 from typing import Union
 from src.configurations import Configuration, GeneralisedCols, OpenAPSConfigs
 
@@ -111,7 +111,7 @@ def read_zip_file(config,
                   read_file_into_df_function):
     read_record = ReadRecord()
     read_record.zip_id = Path(file_name).stem
-    print(read_record.zip_id)
+    logger.info(f'Reading {read_record.zip_id}')
     # find bg files in the zip file
     with zipfile.ZipFile(file_name, mode="r") as archive:
         files_and_folders = archive.namelist()
@@ -134,7 +134,7 @@ def read_zip_file(config,
 
             # skip files that are zero size, but log them
             if info.file_size == 0:
-                logging.info('Found empty file: ' + file +
+                logger.info('Found empty file: ' + file +
                              ' for id: ' + read_record.zip_id)
                 continue
 
@@ -401,8 +401,6 @@ def read_profile_file_to_df(archive, file, read_record, config):
                    "found: ['defaultProfile']")
             if str(e) == msg:
                 # If the file is empty, set has_no_files to True
-                print(tz_cols)
-                print(header_cols)
                 file_name.seek(0)  # Reset pointer as left at end with exception
                 df = pd.read_csv(file_name, usecols=tz_cols, dtype=object)
                 df['defaultProfile'] = None
@@ -450,7 +448,7 @@ def get_all_offsets_df_from_profiles(config: Configuration) -> pd.DataFrame:
         try:
             df = get_regions_df_from_profile(rr)
         except AttributeError as e:
-            logging.info(f'ID {rr.zip_id}: Could not read profile file: {e}')
+            logger.info(f'ID {rr.zip_id}: Could not read profile file: {e}')
             continue
         df = df.drop(columns='column_name').drop_duplicates()
         df['offset'] = (df['tz']
@@ -565,7 +563,7 @@ def parse_standard_date(treat_timezone, date_str):
                 new_dt = ensure_utc(new_dt)
             return new_dt
         except ValueError:
-            logging.info(f'Could not parse date {date_str}: {date_str}')
+            logger.info(f'Could not parse date {date_str}: {date_str}')
             continue
 
     return pd.NaT
