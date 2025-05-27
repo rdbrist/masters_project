@@ -213,14 +213,14 @@ class Cob:
 
         df_cob = self.individual_dataset.copy()
 
-        # Reindex to 15-minute intervals and interpolate
-        date_rng = self._get_time_series_range()
-        df_cob = df_cob.reindex(date_rng)
+        # Resample to desired intervals and interpolate
+        df_cob = df_cob.asfreq(str(self.sampling_rate)+'min')
+        df_cob['cob interpolate'] = df_cob['cob max'].interpolate(method='time')
         df_cob['day'] = df_cob.index.date
         df_cob['time'] = df_cob.index.time
-        df_cob['cob interpolate'] = df_cob['cob max'].interpolate(method='time')
         # Given that interpolate does not extrapolate
-        df_cob['cob interpolate'] = df_cob['cob interpolate'].fillna(0)
+        df_cob[['cob max', 'cob interpolate']] = (
+            df_cob[['cob max', 'cob interpolate']].fillna(0))
         self.individual_dataset = df_cob
         self.interpolated = True
 
@@ -475,7 +475,8 @@ class Cob:
                           ids: list = None,
                           height: int = None,
                           distance: int = None,
-                          suppress: bool = False):
+                          suppress: bool = False,
+                          remove_zero_days: bool = True):
         """
         Pre-processes the data for a batch of individuals, including
         interpolating missing values and identifying peaks.
@@ -514,8 +515,10 @@ class Cob:
                 self.identify_peaks_for_individual(height=height,
                                                    distance=distance,
                                                    suppress=suppress))
-            self.individual_dataset, _ = (
-                self.remove_zero_peak_days(suppress=suppress))
+
+            if remove_zero_days:
+                self.individual_dataset, _ = (
+                    self.remove_zero_peak_days(suppress=suppress))
             self.individual_dataset['id'] = int(p_id)
             self.individual_dataset = (self.individual_dataset.
                                        reset_index(names='datetime').
@@ -533,9 +536,9 @@ class Cob:
         if not suppress:
             if ignored > 0:
                 print(
-                    f'From {len(ids)}, ignored {ignored} individuals not found '
-                    f'in dataset, leaving {len(ids) - ignored} processed '
-                    f'records.')
+                    f'From {len(ids)} IDs requested processing, ignored '
+                    f'{ignored} individuals not found in dataset, leaving '
+                    f'{len(ids) - ignored} processed records.')
             print(f'The following stats are based on parameters h={height} and '
                   f'd={distance}:')
             print(f'\tNumber of records: {len(df_all)}')
@@ -573,12 +576,13 @@ class Cob:
         Removes days with no peaks from an individual dataset, based on the
         interpolated data by default. (The individual dataset hsa a one-level
         index of datetime).
-
-        Returns:
-            df_cob (pd.DataFrame): DataFrame with days with zero-data days
-            removed df_agg_by_day (pd.DataFrame): DataFrame containing
-            aggregated data by day, flagging removed days (but not removing
-            them)
+        :param variable: (str) Variable to use for aggregation, default is
+            'cob interpolate'
+        :param suppress: (bool) Suppress output messages if True
+        :return: tuple: A tuple containing two DataFrames:
+            - df_cob: DataFrame with days with zero-data days removed
+            - df_agg_by_day: DataFrame containing aggregated data by day,
+            flagging removed days (but not removing them)
         """
         # Make a copy to avoid slicing warnings
         df_cob = self.individual_dataset.copy()
@@ -646,7 +650,10 @@ class Cob:
                              " Please ensure each ID is unique such that only"
                              " one offset exists.")
         zip_ids = profile_offsets.index.unique()
-        self.pre_process_batch(ids=zip_ids, **args)
+
+        # We are preparing this for further processing in models, so we need a
+        # consistent range of intervals, irrespective of zero day gaps
+        self.pre_process_batch(ids=zip_ids, remove_zero_days=False, **args)
 
         # Check for missing ids before mapping
         missing_ids = (
@@ -664,7 +671,7 @@ class Cob:
                 self.processed_dataset['datetime'] +
                 self.processed_dataset['offset'].
                 apply(lambda h: timedelta(hours=h)))
-        self.processed_dataset['date'] = (
+        self.processed_dataset['day'] = (
             self.processed_dataset['datetime'].dt.date)
         self.processed_dataset['time'] = (
             self.processed_dataset['datetime'].dt.time)
@@ -673,10 +680,6 @@ class Cob:
                                   sort_index())
         self.offset_processed = True
         return self.processed_dataset
-
-
-def _return_peaks(df):
-    pass
 
 
 def plot_by_hour_individuals(df):
