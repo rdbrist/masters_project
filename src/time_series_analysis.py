@@ -66,48 +66,47 @@ def ts_plot_cfs(y: pd.DataFrame):
     plt.show()
 
 
-def p_q_result(pmax: int,
+def p_q_result(ytrain: pd.DataFrame,
+               pmax: int,
                qmax: int,
                pstep: int,
                qstep: int,
-               ytrain: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+               ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Perform a grid search over ARIMA model parameters (p, q) to find the best
     combination based on Mean Absolute Error (MAE). This function trains ARIMA
     models for different combinations of p and q, calculates the MAE for each
     model, and visualizes the results in a heatmap. It also collects AIC and BIC
     values for each model in a DataFrame.
+    :param ytrain: (pd.DataFrame) Training data for the time series.
     :param pmax: (int) Maximum value for the AR parameter (p).
     :param qmax: (int) Maximum value for the MA parameter (q).
     :param pstep: (int) Step size for the AR parameter (p).
     :param qstep: (int) Step size for the MA parameter (q).
-    :param ytrain: (pd.DataFrame) Training data for the time series.
     :return:
     """
     p_params = range(0, pmax, pstep)
     q_params = range(0, qmax, qstep)
-    mae_grid = dict()
-    aicbic_df = pd.DataFrame(columns=['Order', 'AIC', 'BIC'])
+    mae_grid = {}
     init_time = time.time()
 
+    aicbic_list = []
     for p in p_params:
-        mae_grid[p] = list()
+        mae_grid[p] = []
         for q in q_params:
             order = (p, 0, q)
             start_time = time.time()
             model = ARIMA(ytrain, order=order).fit()
-            value_dict = {'Order': [order],
+            aicbic_list.append({'Order': [order],
                           'AIC': [model.aic],
-                          'BIC': [model.bic]}
-            new_row = pd.DataFrame(value_dict, columns=['Order', 'AIC', 'BIC'])
-            aicbic_df = pd.concat([aicbic_df, new_row], ignore_index=True)
+                          'BIC': [model.bic]})
             elapsed_time = round(time.time() - start_time, 2)
             print(f"Trained ARIMA {order} in {elapsed_time} seconds.")
             y_pred = model.predict()
             print(y_pred.isnull().sum().sum(), "null values in predictions")
             mae = mean_absolute_error(ytrain, y_pred)
             mae_grid[p].append(mae)
-
+    aicbic_df = pd.DataFrame(aicbic_list, columns=['Order', 'AIC', 'BIC'])
     print(f'All permutations completed in {round(time.time() - init_time, 2)} '
           f'seconds.')
 

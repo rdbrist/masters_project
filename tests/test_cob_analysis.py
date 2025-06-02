@@ -1,6 +1,9 @@
 import pytest
 import pandas as pd
-from src.cob_analysis import Cob
+import numpy as np
+from src.cob_analysis import (Cob,
+                              remove_zero_or_null_days,
+                              separate_broken_series)
 
 @pytest.fixture
 def mock_data_dir(tmp_path):
@@ -128,7 +131,9 @@ def test_read_interim_data_valid_csv(cob_instance, mock_data_dir):
     file_path = mock_data_dir / "valid_data.csv"
     data = {
         "id": [1, 1, 1],
-        "datetime": ["2023-01-01 00:00", "2023-01-01 00:15", "2023-01-01 00:30"],
+        "datetime": ["2023-01-01 00:00",
+                     "2023-01-01 00:15",
+                     "2023-01-01 00:30"],
         "system": ["A", "A", "A"]
     }
     df = pd.DataFrame(data)
@@ -138,7 +143,9 @@ def test_read_interim_data_valid_csv(cob_instance, mock_data_dir):
     cob_instance.data_file_path = mock_data_dir
 
     # Call the method
-    cob_instance.read_interim_data(file_name="valid_data", file_type="csv", sampling_rate=15)
+    cob_instance.read_interim_data(file_name="valid_data",
+                                   file_type="csv",
+                                   sampling_rate=15)
 
     # Assertions
     assert cob_instance.dataset is not None
@@ -146,8 +153,14 @@ def test_read_interim_data_valid_csv(cob_instance, mock_data_dir):
     assert cob_instance.sampling_rate == 15
 
     # Verify that the sampling rate matches the datetime intervals
-    for p_id in cob_instance.dataset.index.get_level_values('id').drop_duplicates():
-        datetimes = cob_instance.dataset.loc[p_id].reset_index()['datetime'].sort_values()
+    for p_id in (cob_instance.
+            dataset.
+            index.
+            get_level_values('id').
+            drop_duplicates()):
+        datetimes = (cob_instance.dataset.loc[p_id].
+                     reset_index()['datetime'].
+                     sort_values())
         assert Cob._check_consecutive_intervals(datetimes, 15)
         assert Cob._check_minute_factor(datetimes, 15)
 
@@ -156,7 +169,9 @@ def test_read_interim_data_invalid_sampling_rate(cob_instance, mock_data_dir):
     file_path = mock_data_dir / "invalid_sampling.csv"
     data = {
         "id": [1, 1, 1],
-        "datetime": ["2023-01-01 00:01", "2023-01-01 00:16", "2023-01-01 00:31"],
+        "datetime": ["2023-01-01 00:01",
+                     "2023-01-01 00:16",
+                     "2023-01-01 00:31"],
         "system": ["A", "A", "A"]
     }
     df = pd.DataFrame(data)
@@ -166,7 +181,8 @@ def test_read_interim_data_invalid_sampling_rate(cob_instance, mock_data_dir):
     cob_instance.data_file_path = mock_data_dir
 
     # Call the method and expect a ValueError
-    with pytest.raises(ValueError, match="Sampling rate 15 does not match the minute values for ID 1."):
+    with pytest.raises(ValueError, match="Sampling rate 15 does not match the "
+                                         "minute values for ID 1."):
         cob_instance.read_interim_data(file_name="invalid_sampling",
                                        file_type="csv",
                                        sampling_rate=15)
@@ -190,12 +206,14 @@ def test_read_interim_data_valid_parquet(cob_instance, mock_data_dir):
     file_path = mock_data_dir / "valid_data.parquet"
     data = {
         "id": [1, 1, 1],
-        "datetime": ["2023-01-01 00:00", "2023-01-01 00:15", "2023-01-01 00:30"],
+        "datetime": ["2023-01-01 00:00",
+                     "2023-01-01 00:15",
+                     "2023-01-01 00:30"],
         "system": ["A", "A", "A"]
     }
     df = pd.DataFrame(data)
     df["datetime"] = pd.to_datetime(df["datetime"])
-    df.set_index(["id", "datetime"], inplace=True)  # Set multi-level index
+    df.set_index(["id", "datetime"], inplace=True)  # Set multilevel index
     df.to_parquet(file_path)
 
     # Ensure the file exists
@@ -220,7 +238,8 @@ def test_get_person_data_valid_id(cob_instance):
     assert not person_data.empty
     assert len(person_data) == 2
     cob_instance.dataset = cob_instance.dataset.drop(columns=['cob max'])
-    with pytest.raises(ValueError, match='Column "cob max" not found in dataset.'):
+    with pytest.raises(ValueError, match='Column "cob max" not found in '
+                                         'dataset.'):
         cob_instance.get_person_data(1)
 
 def test_get_person_data_invalid_id(cob_instance):
@@ -229,3 +248,67 @@ def test_get_person_data_invalid_id(cob_instance):
         cob_instance.get_person_data(999)
     with pytest.raises(KeyError, match="xxx"):
         cob_instance.get_person_data("xxx")
+
+@pytest.fixture
+def cob_with_data(tmp_path):
+    # Create a minimal dataset with 15-min intervals for one id
+    dt_rng = pd.date_range("2024-01-01", periods=4, freq="15min")
+    df = pd.DataFrame({
+        "id": [1]*4,
+        "datetime": dt_rng,
+        "cob max": [1, 2, 3, 4],
+        "system": ["A"]*4
+    }).set_index(["id", "datetime"])
+    # Save to a temporary parquet file
+    data_file = tmp_path / "test.parquet"
+    df.to_parquet(data_file)
+    cob = Cob()
+    cob.data_file_path = tmp_path
+    cob.read_interim_data("test", file_type="parquet", sampling_rate=15)
+    return cob
+
+def test_process_one_tz_individuals_frequency(cob_with_data):
+    cob = cob_with_data
+    profile_offsets = pd.DataFrame({"offset": [0]}, index=[1])
+    args = {"height": 1, "distance": 1}
+    result = cob.process_one_tz_individuals(profile_offsets, args)
+    # Check frequency for each id
+    for id_val in result.index.get_level_values("id").unique():
+        dt_index = result.loc[id_val].index
+
+def test_remove_zero_or_null_days():
+    df_not_dt = pd.DataFrame({'value': [0, 0, np.nan, 5, 0, 1]})
+    with pytest.raises(ValueError,
+                       match='DataFrame index must be a DatetimeIndex.'):
+        remove_zero_or_null_days(df_not_dt, 'value')
+
+    df = pd.DataFrame({'value': [0, 0, np.nan, 5, 0, 1]},
+                      index=pd.date_range('2024-01-01', periods=6, freq='12H'))
+
+    result = remove_zero_or_null_days(df, 'value')
+    expected_dates = pd.to_datetime(['2024-01-02 00:00:00',
+                                     '2024-01-02 12:00:00',
+                                     '2024-01-03 00:00:00',
+                                     '2024-01-03 12:00:00'])
+    assert result.index.equals(expected_dates)
+
+    df2 = pd.DataFrame({'value': [1, 2, 3, 4]},
+                       index=pd.date_range('2024-01-01', periods=4, freq='D'))
+    result2 = remove_zero_or_null_days(df2, 'value')
+    assert len(result2) == 4
+
+    df3 = pd.DataFrame({'value': [0, 0, np.nan, 0]},
+                       index=pd.date_range('2024-01-01', periods=4, freq='D'))
+    result3 = remove_zero_or_null_days(df3, 'value')
+    assert result3.empty
+
+def test_separate_broken_series():
+    idx = pd.date_range(start='2023-01-01', periods=6, freq='D')
+    df1 = pd.DataFrame({'cob max': [10, 20, 30, 40, 50, 60]}, index=idx)
+
+    result1 = separate_broken_series(df1, 3)
+    assert len(result1) == 1
+
+    df2 = pd.DataFrame({'cob max': [10, 20, 0, 0, 0, 60]}, index=idx)
+    result2 = separate_broken_series(df2, 3)
+    assert len(result2) == 2

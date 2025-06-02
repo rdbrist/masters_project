@@ -480,6 +480,7 @@ class Cob:
         """
         Pre-processes the data for a batch of individuals, including
         interpolating missing values and identifying peaks.
+        :param remove_zero_days: Toggles removal of days with no peaks.
         :param ids: (list) List of individual IDs
         :param height: (int) Height parameter for find_peaks function
         :param distance: (int) Distance parameter for find_peaks function
@@ -530,6 +531,7 @@ class Cob:
             self.individual = None
 
             self.processed_dataset = df_all
+            df_all.index.freq = str(self.sampling_rate) + 'min'
             df_all.to_parquet(self.data_file_path /
                               'processed_cob_data.parquet')
 
@@ -780,3 +782,46 @@ def hierarchical_clustering(summary_df: pd.DataFrame,
     plt.show()
 
     return summary_df
+
+def remove_zero_or_null_days(df: pd.DataFrame, value_col: str) -> pd.DataFrame:
+    """
+    Keep only days where all values where at least one of the timestamps is
+    non-zero or non-null.
+    :param df: DataFrame with DatetimeIndex.
+    :param value_col: Name of the column to check.
+    :return: Filtered DataFrame.
+    """
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError("DataFrame index must be a DatetimeIndex.")
+
+    # Find days where all values are non-zero and non-null
+    mask = df.groupby(df.index.date)[value_col].apply(
+        lambda x: (x.notnull() & (x != 0)).any()
+    )
+    logger.info(f'Masking {mask.sum()} days with non-zero or non-null values'
+                f'from {len(df.groupby(df.index.date))} total days.')
+    keep_dates = set(mask[mask].index)
+    date_mask = np.array([d in keep_dates for d in df.index.date])
+    return df[date_mask]
+
+def split_on_time_gaps(df: pd.DataFrame,
+                       value_col: str,
+                       days_threshold: int = 3) -> list:
+    """
+    Removes days with all zero or null values, then splits DataFrame at gaps in
+    the DatetimeIndex
+    greater than days_threshold.
+    :param df: DataFrame with a DatetimeIndex.
+    :param value_col: Name of the column to check for zero or null values.
+    :param days_threshold: Number of days to consider as a gap.
+    :return: List of DataFrames, each representing a continuous segment of the
+    time series.
+    """
+    # Remove days with all zero or null values
+    df = remove_zero_or_null_days(df, value_col)
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError("DataFrame index must be a DatetimeIndex.")
+    df = df.sort_index()
+    gaps = df.index.to_series().diff().dt.days.fillna(0)
+    group = (gaps > days_threshold).cumsum()
+    return [group_df for _, group_df in df.groupby(group) if not group_df.empty]
