@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from src.cob_analysis import (Cob,
                               remove_zero_or_null_days,
-                              separate_broken_series)
+                              split_on_time_gaps)
 
 @pytest.fixture
 def mock_data_dir(tmp_path):
@@ -302,13 +302,13 @@ def test_remove_zero_or_null_days():
     result3 = remove_zero_or_null_days(df3, 'value')
     assert result3.empty
 
-def test_separate_broken_series():
+def test_split_on_time_gaps():
     idx = pd.date_range(start='2023-01-01', periods=6, freq='D')
     df1 = pd.DataFrame({'cob max': [10, 20, 30, 40, 50, 60]}, index=idx)
 
-    result1 = separate_broken_series(df1, 3)
+    result1 = split_on_time_gaps(df1, value_col='cob max', days_threshold=3)
     assert len(result1) == 1
 
     df2 = pd.DataFrame({'cob max': [10, 20, 0, 0, 0, 60]}, index=idx)
-    result2 = separate_broken_series(df2, 3)
+    result2 = split_on_time_gaps(df2, value_col='cob max', days_threshold=3)
     assert len(result2) == 2
