@@ -28,8 +28,8 @@ def split_ts(y: pd.DataFrame, ratio: float) -> (
     print(f'Number of values: {num_vals}')
     print(f'Train set size: {split}')
     print(f'Test set size: {num_vals - split}')
-    ytrain = y.iloc[:split]
-    ytest = y.iloc[split:]
+    ytrain = y.iloc[:split].copy()
+    ytest = y.iloc[split:].copy()
     return ytrain, ytest
 
 
