@@ -20,7 +20,7 @@ from src.data_processing.read import (
     read_all_bg,
     read_device_status_file_into_df,
     read_device_status_from_zip,
-    extract_timezone,
+    extract_timezone_offset,
     convert_timezone_to_utc_offset
 )
 from datetime import datetime, timezone, timedelta
@@ -254,7 +254,6 @@ def test_parse_date_columns_dataframe_uniform(monkeypatch, treat_timezone, input
     result = parse_date_columns(treat_timezone, input_df)
     pd.testing.assert_frame_equal(result, expected)
 
-
 def test_read_zip_file(input_file):
     # Setup
     config = Configuration()  # Ensure this is properly initialized for the test
@@ -309,7 +308,41 @@ def test_read_bg_from_zip(input_file):
     assert "bg" in read_record.df.columns, "The DataFrame should contain a 'bg' column"
     assert read_record.number_of_rows > 0, "The number of rows should be greater than 0"
 
-def assert_from_bg_records(records):
+def test_read_all_device_status(input_file):
+    # Setup
+    config = Configuration()  # Ensure this is properly initialized for the test
+    config.data_dir = str(input_file.parent)  # Set the data directory
+    config.device_status_csv_file_start = ""  # Adjust based on your file naming convention
+    config.csv_extension = ".csv"  # Adjust based on your file extension
+    config.zip_ids_2023_subset = ['0001']  # Adjust based on your test data
+
+    # Call the function
+    records = read_all_device_status(config)
+
+    # Assertions
+    assert isinstance(records,
+                      list), "The result should be a list of ReadRecord instances"
+    assert len(records) > 0, "The list of records should not be empty"
+
+    for record in records:
+        assert isinstance(record,
+                          ReadRecord), "Each item in the list should be a ReadRecord instance"
+        assert record.zip_id is not None, "Each record should have a zip_id"
+        assert record.df is not None, "Each record should have a DataFrame"
+        assert not record.df.empty, "The DataFrame should not be empty"
+        assert "created_at" in record.df.columns, "The DataFrame should contain a 'created_at' column"
+        assert record.number_of_rows > 0, "The number of rows should be greater than 0"
+
+def test_read_all_bg(input_file):
+    # Setup
+    config = Configuration()  # Ensure this is properly initialized for the test
+    config.data_dir = str(input_file.parent)  # Set the data directory
+    config.zip_ids_2023_subset = ['0001']  # Adjust based on your test data
+
+    # Call the function
+    records = read_all_bg(config)
+
+    # Assertions
     assert isinstance(records, list), "The result should be a list of ReadRecord instances"
     assert len(records) > 0, "The list of records should not be empty"
 
@@ -321,55 +354,6 @@ def assert_from_bg_records(records):
         assert "time" in record.df.columns, "The DataFrame should contain a 'time' column"
         assert "bg" in record.df.columns, "The DataFrame should contain a 'bg' column"
         assert record.number_of_rows > 0, "The number of rows should be greater than 0"
-
-def assert_from_device_status_records(records):
-    assert isinstance(records, list), "The result should be a list of ReadRecord instances"
-    assert len(records) > 0, "The list of records should not be empty"
-
-    for record in records:
-        assert isinstance(record, ReadRecord), "Each item in the list should be a ReadRecord instance"
-        assert record.zip_id is not None, "Each record should have a zip_id"
-        assert record.df is not None, "Each record should have a DataFrame"
-        assert not record.df.empty, "The DataFrame should not be empty"
-        assert "created_at" in record.df.columns, "The DataFrame should contain a 'created_at' column"
-        assert record.number_of_rows > 0, "The number of rows should be greater than 0"
-
-def test_read_all(input_file):
-    # Setup
-    config = Configuration()  # Ensure this is properly initialized for the test
-    config.data_dir = str(input_file.parent)  # Set the data directory
-
-    # Use read_bg_from_zip as the function to read from the zip file
-    records = read_all(config, read_bg_from_zip)
-    assert_from_bg_records(records)
-
-    # Use read_device_status_from_zip as the function to read device status
-    records = read_all(config, read_device_status_from_zip)
-    assert_from_device_status_records(records)
-
-def test_read_all_device_status(input_file):
-    # Setup
-    config = Configuration()  # Ensure this is properly initialized for the test
-    config.data_dir = str(input_file.parent)  # Set the data directory
-    config.device_status_csv_file_start = ""  # Adjust based on your file naming convention
-    config.csv_extension = ".csv"  # Adjust based on your file extension
-
-    # Call the function
-    records = read_all_device_status(config)
-
-    # Assertions
-    assert_from_device_status_records(records)
-
-def test_read_all_bg(input_file):
-    # Setup
-    config = Configuration()  # Ensure this is properly initialized for the test
-    config.data_dir = str(input_file.parent)  # Set the data directory
-
-    # Call the function
-    records = read_all_bg(config)
-
-    # Assertions
-    assert_from_bg_records(records)
 
 def test_read_device_status_file_into_df(input_file):
     # Setup
@@ -490,34 +474,34 @@ class DummyConfig(Configuration):
         # For BG: ['time'], Device: ['created_at', 'pump/clock'], Profile: ['startDate']
         return ['time', 'created_at', 'pump/clock', 'startDate']
 
-def test_extract_timezone_permutations():
+def test_extract_timezone_offset_permutations():
     config = DummyConfig()
 
-    # BG entries: one timezone
+    # BG entries: one timezone (UTC+2)
     rr_bg_one = ReadRecord(df=pd.DataFrame({'time': [
         pd.Timestamp('2023-10-01 12:00:00+02:00'),
         pd.Timestamp('2023-10-01 13:00:00+02:00')
     ]}))
-    tzs = extract_timezone(rr_bg_one, config)
-    assert set(tzs) == {timezone(timedelta(hours=2))}
+    tzs = extract_timezone_offset(rr_bg_one, config)
+    assert set(tzs) == {2}
 
-    # BG entries: two timezones
+    # BG entries: two timezones (UTC+2, UTC+1)
     rr_bg_two = ReadRecord(df=pd.DataFrame({'time': [
         pd.Timestamp('2023-10-01 12:00:00+02:00'),
         pd.Timestamp('2023-10-01 11:00:00+01:00')
     ]}))
-    tzs = extract_timezone(rr_bg_two, config)
-    assert set(tzs) == {timezone(timedelta(hours=2)), timezone(timedelta(hours=1))}
+    tzs = extract_timezone_offset(rr_bg_two, config)
+    assert set(tzs) == {2, 1}
 
-    # BG entries: timezone naive
+    # BG entries: timezone naive (should be None)
     rr_bg_naive = ReadRecord(df=pd.DataFrame({'time': [
         pd.Timestamp('2023-10-01 12:00:00'),
         pd.Timestamp('2023-10-01 13:00:00')
     ]}))
-    tzs = extract_timezone(rr_bg_naive, config)
+    tzs = extract_timezone_offset(rr_bg_naive, config)
     assert all(tz is None for tz in tzs)
 
-    # Device status: one timezone
+    # Device status: one timezone (UTC+0)
     rr_dev_one = ReadRecord(df=pd.DataFrame({'created_at': [
         pd.Timestamp('2023-10-01T12:00:00+00:00'),
         pd.Timestamp('2023-10-01T13:00:00+00:00')
@@ -525,10 +509,10 @@ def test_extract_timezone_permutations():
         pd.Timestamp('2023-10-01T12:00:00+00:00'),
         pd.Timestamp('2023-10-01T13:00:00+00:00')
     ]}))
-    tzs = extract_timezone(rr_dev_one, config)
-    assert set(tzs) == {timezone.utc}
+    tzs = extract_timezone_offset(rr_dev_one, config)
+    assert set(tzs) == {0}
 
-    # Device status: two timezones
+    # Device status: two timezones (UTC+1, UTC+2)
     rr_dev_two = ReadRecord(df=pd.DataFrame({'created_at': [
         pd.Timestamp('2023-10-01T12:00:00+01:00'),
         pd.Timestamp('2023-10-01T13:00:00+02:00')
@@ -536,10 +520,10 @@ def test_extract_timezone_permutations():
         pd.Timestamp('2023-10-01T12:00:00+01:00'),
         pd.Timestamp('2023-10-01T13:00:00+02:00')
     ]}))
-    tzs = extract_timezone(rr_dev_two, config)
-    assert set(tzs) == {timezone(timedelta(hours=1)), timezone(timedelta(hours=2))}
+    tzs = extract_timezone_offset(rr_dev_two, config)
+    assert set(tzs) == {1, 2}
 
-    # Device status: timezone naive
+    # Device status: timezone naive (should be None)
     rr_dev_naive = ReadRecord(df=pd.DataFrame({'created_at': [
         pd.Timestamp('2023-10-01T12:00:00'),
         pd.Timestamp('2023-10-01T13:00:00')
@@ -547,34 +531,34 @@ def test_extract_timezone_permutations():
         pd.Timestamp('2023-10-01T12:00:00'),
         pd.Timestamp('2023-10-01T13:00:00')
     ]}))
-    tzs = extract_timezone(rr_dev_naive, config)
+    tzs = extract_timezone_offset(rr_dev_naive, config)
     assert all(tz is None for tz in tzs)
 
-    # Profile: one timezone
+    # Profile: one timezone (UTC+3)
     rr_prof_one = ReadRecord(df=pd.DataFrame({'startDate': [
         pd.Timestamp('2023-10-01T12:00:00+03:00'),
         pd.Timestamp('2023-10-01T13:00:00+03:00')
     ]}))
-    tzs = extract_timezone(rr_prof_one, config)
-    assert set(tzs) == {timezone(timedelta(hours=3))}
+    tzs = extract_timezone_offset(rr_prof_one, config)
+    assert set(tzs) == {3}
 
-    # Profile: two timezones
+    # Profile: two timezones (UTC+3, UTC+4)
     rr_prof_two = ReadRecord(df=pd.DataFrame({'startDate': [
         pd.Timestamp('2023-10-01T12:00:00+03:00'),
         pd.Timestamp('2023-10-01T13:00:00+04:00')
     ]}))
-    tzs = extract_timezone(rr_prof_two, config)
-    assert set(tzs) == {timezone(timedelta(hours=3)), timezone(timedelta(hours=4))}
+    tzs = extract_timezone_offset(rr_prof_two, config)
+    assert set(tzs) == {3, 4}
 
-    # Profile: timezone naive
+    # Profile: timezone naive (should be None)
     rr_prof_naive = ReadRecord(df=pd.DataFrame({'startDate': [
         pd.Timestamp('2023-10-01T12:00:00'),
         pd.Timestamp('2023-10-01T13:00:00')
     ]}))
-    tzs = extract_timezone(rr_prof_naive, config)
+    tzs = extract_timezone_offset(rr_prof_naive, config)
     assert all(tz is None for tz in tzs)
 
-@pytest.mark.parametrize("val, expected_offset_hours", [
+@pytest.mark.parametrize("tmz, expected_offset_hours", [
     # IANA region strings
     ("Europe/Berlin", 2),
     ("America/New_York", -4),
@@ -595,5 +579,5 @@ def test_extract_timezone_permutations():
 def test_convert_timezone_to_utc_offset(tmz, expected_offset_hours):
     offset = convert_timezone_to_utc_offset(tmz)
     assert offset is not None
-    assert isinstance(offset, timedelta)
-    assert offset.total_seconds() // 3600 == expected_offset_hours
+    assert isinstance(offset, int)
+    assert offset == expected_offset_hours
