@@ -11,4 +11,9 @@ flat_file  : TRUE
 
 # This property sets whether the time should be left as-is, converted to UTC, or localised (i.e. dropping the timezone 
 # information. Options are 'keep', 'utc' and 'localise' respectively. 
-treat_timezone : 'keep'
+treat_timezone : 'localise'
+
+# Here you can determine whether to use the subset of the data from the 2023
+#  OpenAPS data release that has been preprocessed, or the latest full data
+# release.
+limit_to_2023_subset : TRUE

@@ -18,6 +18,7 @@ def main():
     start_time = time.time()
     config = Configuration()
     keep_cols = config.keep_columns
+    keep_ids = config.get_list_of_permitted_zip_ids()
 
     # ----------------------Write consolidated flat file------------------------
     as_flat_file = True

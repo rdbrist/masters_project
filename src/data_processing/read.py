@@ -90,7 +90,14 @@ class ReadRecord:
 
 
 # reads all files using function
-def read_all(config, function):
+def read_all(config: Configuration,
+             function: callable) -> list[ReadRecord]:
+    """
+    Reads all files in the data directory that match the function criteria.
+    :param config: Configuration object containing data and settings.
+    :param function: Function to read each zip file.
+    :return: List of ReadRecords with the dataframes for each zip file.
+    """
     data = config.data_dir
     # get all zip files in folder
     filepaths = glob.glob(str(data) + "/*.zip")
@@ -98,6 +105,10 @@ def read_all(config, function):
     for file in filepaths:
         # Android read below
         if file.endswith(config.android_aps_zip):
+            continue
+        if (config.limit_to_2023_subset and
+                any(s not in file for s in
+                    config.get_list_of_permitted_zip_ids())):
             continue
         read_record = function(file, config)
         read_records.append(read_record)
@@ -155,6 +166,13 @@ def headers_in_file(file):
 
 
 def extract_timezone_offset(read_record, config):
+    """
+    Extracts the unique UTC offsets from the time columns in a ReadRecord's
+    DataFrame.
+    :param read_record: ReadRecord object containing the DataFrame.
+    :param config: Configuration object containing time column names.
+    :return: A Series of unique UTC offsets.
+    """
     try:
         time_cols = [c for c in config.time_cols()
                      if c in read_record.df.columns]
@@ -219,7 +237,12 @@ def convert_timezone_to_utc_offset(tz_val, dt=None):
 # ------------------------- Read BG Functions --------------------------- #
 
 # reads all BG files from each zip files without extracting the zip
-def read_all_bg(config: Configuration):
+def read_all_bg(config: Configuration) -> list[ReadRecord]:
+    """
+    Reads all BG files from each zip file without extracting the zip.
+    :param config: Configuration object containing data and settings.
+    :return: List of ReadRecords with the dataframes for each zip file.
+    """
     return read_all(config, read_bg_from_zip)
 
 
@@ -232,9 +255,16 @@ def read_bg_from_zip(file_name, config):
                          read_entries_file_into_df)
 
 
-# reads BG data from entries file into df and adds it to read_record,
-# config is there for consistency
 def read_entries_file_into_df(archive, file, read_record, config):
+    """
+    Reads BG data from entries file into df and adds it to read_record, config
+    is there for consistency.
+    :param archive:
+    :param file:
+    :param read_record:
+    :param config:
+    :return:
+    """
 
     def add_record(df, read_record, config):
         df[['time']] = parse_date_columns(config.treat_timezone, df[['time']])
@@ -290,12 +320,12 @@ def read_flat_device_status_df_from_file(file: Path, config: Configuration):
 
 
 # reads all device status files into a list of read records
-def read_all_device_status(config):
+def read_all_device_status(config: Configuration) -> list[ReadRecord]:
     """
     Reads all device status files from each zip file without extracting the zip.
     Return is a list of ReadRecords with the dataframes, consolidating the
     device status files from each zip file.
-    :param config:
+    :param config: Configuration object containing data and settings.
     :return: ReadRecord list with the dataframes
     """
     return read_all(config, read_device_status_from_zip)
@@ -374,7 +404,12 @@ def is_a_device_status_csv_file(config, patient_id, file_path):
 
 # ------------------------ Read Profile Functions --------------------------- #
 
-def read_all_profile(config: Configuration):
+def read_all_profile(config: Configuration) -> list[ReadRecord]:
+    """
+    Reads all profile files from each zip file without extracting the zip.
+    :param config: Configuration object containing data and settings.
+    :return: List of ReadRecords with the dataframes for each zip file.
+    """
     return read_all(config, read_profile_from_zip)
 
 
@@ -385,7 +420,7 @@ def read_profile_from_zip(file_name, config):
                          read_profile_file_to_df)
 
 
-def read_profile_file_to_df(archive, file, read_record, config):
+def read_profile_file_to_df(archive, file, read_record):
     with archive.open(file, mode="r") as header_context:
         text_io_wrapper = TextIOWrapper(header_context, encoding="utf-8")
         header_cols = headers_in_file(text_io_wrapper)
