@@ -1,6 +1,7 @@
 from decimal import ROUND_HALF_UP, Decimal
 import numpy as np
 import pandas as pd
+from loguru import logger
 
 from src.configurations import Resampling, GeneralisedCols, Configuration
 
@@ -38,9 +39,10 @@ class ResampleDataFrame:
             for col in columns:
                 if col in df:
                     try:
-                        df.loc[:, col] = df[col].apply(self.__round_numbers)
+                        df.loc[:, col] = (df[col].apply(self.__round_numbers).
+                                          astype(df[col].dtype))
                     except FutureWarning as e:
-                        print(f'Error occurred for person {self.zip_id} '
+                        logger.warning(f'Error occurred for person {self.zip_id} '
                               f'in column {col}:\n{e}')
             return df
 
@@ -180,11 +182,19 @@ class ResampleDataFrame:
 
         # replace na with 0 for count columns
         count_columns = self.__config.resampling_count_columns()
-        resulting_df.loc[:, count_columns] = \
-            (resulting_df[count_columns].
-             apply(pd.to_numeric, errors='coerce').
-             fillna(0).
-             astype(int))
+        try:
+            resulting_df.loc[:, count_columns] = \
+                (resulting_df[count_columns].
+                 apply(pd.to_numeric, errors='raise').
+                 astype(int).
+                 fillna(0)
+                 #.astype(int)
+                 )
+        except Exception as e:
+            logger.info(f'Error occurred while converting count columns to int for '
+                  f'zip_id {self.zip_id}:\n{e}')
+            #resulting_df.loc[:, count_columns] = 0
+
 
         # reorder columns
         return resulting_df.loc[:, columns]

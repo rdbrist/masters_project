@@ -45,7 +45,7 @@ class ReadRecord:
 
         missing_cols = [col for col in keep_cols if col not in self.df.columns]
         if missing_cols:
-            print(f"Columns not in file for zip {self.zip_id}: {missing_cols}")
+            logger.info(f"Columns not in file for zip {self.zip_id}: {missing_cols}")
             self.df[missing_cols] = None
 
         result = self.df[keep_cols].copy()

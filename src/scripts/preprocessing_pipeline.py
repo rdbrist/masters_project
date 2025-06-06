@@ -53,7 +53,8 @@ def main():
 
     fifteen_min_dfs = []
 
-    df = as_flat_dataframe(de_dup_result, drop_na=False, keep_cols=keep_cols)
+    df = as_flat_dataframe(de_dup_result, drop_na=False,
+                           keep_cols=config.keep_columns)
 
     for zip_id, group in df.groupby('id'):
         resampler = ResampleDataFrame(group)
@@ -63,7 +64,8 @@ def main():
     # Concatenate and write resampled DataFrame
     (pd.concat(fifteen_min_dfs).
      reset_index(drop=True).
-     to_parquet(INTERIM_DATA_DIR / fifteen_minute.file_name('parquet'), index=False))
+     to_parquet(INTERIM_DATA_DIR / fifteen_minute.file_name('parquet'),
+                index=False))
 
     print(f'Completed writing resampled flat file(s) in '
           f'{timedelta(seconds=(time.time() - start_time))}')
