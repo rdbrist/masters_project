@@ -154,10 +154,13 @@ class Configuration:
     as_flat_file = config['flat_file']
     treat_timezone = config['treat_timezone']
     limit_to_2023_subset = config['limit_to_2023_subset']
+    if limit_to_2023_subset:
+        subset_ids = pd.read_csv(INTERIM_DATA_DIR / "15min_iob_cob_bg_old_sample.csv",
+                         usecols=['id'])
+        zip_ids_2023_subset = subset_ids['id'].unique().tolist()
     perid_data_folder = INTERIM_DATA_DIR / 'perid'
     csv_extension = '.csv'
     parquet_extension = '.parquet'
-
 
     # bg files
     bg_csv_file_extension = '.json.csv'
@@ -312,17 +315,6 @@ class Configuration:
         entries_col = ['time']
         return (profile_col + device_status_cols_a +
                 device_status_cols_b + entries_col)
-
-    @staticmethod
-    def get_list_of_permitted_zip_ids() -> list:
-        """
-        Returns a list of permitted zip ids based on limitations of the ethics
-        approval for project.
-        :return: List of permitted zip ids
-        """
-        df = pd.read_csv(INTERIM_DATA_DIR / "15min_iob_cob_bg_old_sample.csv",
-                         usecols=['id'])
-        return df['id'].unique().tolist()
 
 # Configuration to use for unit tests. This turns Wandb logging off.
 @dataclass

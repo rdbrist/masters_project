@@ -107,8 +107,8 @@ def read_all(config: Configuration,
         if file.endswith(config.android_aps_zip):
             continue
         if (config.limit_to_2023_subset and
-                any(s not in file for s in
-                    config.get_list_of_permitted_zip_ids())):
+                any(str(s) not in file for s in
+                    config.zip_ids_2023_subset)):
             continue
         read_record = function(file, config)
         read_records.append(read_record)
@@ -165,7 +165,8 @@ def headers_in_file(file):
     return header.columns
 
 
-def extract_timezone_offset(read_record, config):
+def extract_timezone_offset(read_record: ReadRecord,
+                            config: Configuration) -> Union[pd.Series, None]:
     """
     Extracts the unique UTC offsets from the time columns in a ReadRecord's
     DataFrame.
@@ -178,7 +179,7 @@ def extract_timezone_offset(read_record, config):
                      if c in read_record.df.columns]
     except AttributeError:
         print(f'{read_record.zip_id} has no df')
-        return
+        return None
     df = (read_record.df[time_cols].
           melt(var_name='column', value_name='datetime'))
     # Extract timezone from each value individually
@@ -196,11 +197,15 @@ def extract_timezone_offset(read_record, config):
     return df['utc_offset'].unique()
 
 
-def convert_timezone_to_utc_offset(tz_val, dt=None):
+def convert_timezone_to_utc_offset(tz_val: str,
+                                   dt: datetime=None) -> Union[int, None]:
     """
     Converts an IANA region string or a datetime.timezone to its UTC offset
     as integer hours. Returns None if input is intz_valid or offset cannot be
     determined.
+    :param tz_val: IANA region string or datetime.timezone object.
+    :param dt: Optional datetime object to use for offset calculation.
+    :return: Integer representing the UTC offset in hours, or None if tz_val is
     """
     from datetime import datetime, timezone
     import pytz
