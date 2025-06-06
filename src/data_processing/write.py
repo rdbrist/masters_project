@@ -1,16 +1,27 @@
 from pathlib import Path
+from typing import Union
 
 from src.data_processing.format import as_flat_dataframe
+from src.data_processing.read import ReadRecord
 
 
-# writes either a flat file (multiple ids) or a file in a per id folder
-# keep_cols is a list of columns to keep, if None all columns will be kept
-def write_read_record(records,
-                      as_flat_file,
-                      folder,
-                      file_name,
-                      keep_cols=None,
-                      file_type='csv'):
+def write_read_record(records: [ReadRecord],
+                      as_flat_file: bool,
+                      folder: Path,
+                      file_name: str,
+                      keep_cols: Union[list,None] = None,
+                      file_type: str = 'csv'):
+    """
+    Writes either a flat file (multiple ids) or a file in a per id folder
+    :param records: list of ReadRecords to write
+    :param as_flat_file: flag to indicate if a flat file should be written
+    :param folder: Path to folder where the file should be written
+    :param file_name: name of the file to write, if as_flat_file is True this
+        will be the name of the flat file
+    :param keep_cols: list of columns to keep, if None all columns will be kept
+    :param file_type: str, type of file to write, either 'csv' or 'parquet'
+    :return: pd.DataFrame
+    """
     if as_flat_file:
         # turn read records into a flat dataframe
         df = as_flat_dataframe(records, False, keep_cols=keep_cols)

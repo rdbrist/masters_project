@@ -335,7 +335,8 @@ def read_all_device_status(config: Configuration) -> list[ReadRecord]:
 
 
 # reads a device status file
-def read_device_status_from_zip(file, config):
+def read_device_status_from_zip(file: Path, config: Configuration) \
+        -> ReadRecord:
     return read_zip_file(config,
                          file,
                          is_a_device_status_csv_file,

@@ -1,47 +1,116 @@
-import pytest
+import glob
 import pandas as pd
-from src.configurations import Configuration
-from src.data_processing.read import read_all_bg, read_all_device_status
+import pytest
+from pathlib import Path
+
 from src.data_processing.write import write_read_record
-from tests.test_read import input_file
+from tests.helper.BgDfBuilder import BgDfBuilder
+from tests.helper.ReadRecordBuilder import ReadRecordBuilder
+
+folder = 'test_data/'
+per_id_folder = 'test_data/per_id/'
+flat_file_name = 'some_flat_file.csv'
+flat_file_path = Path(folder, flat_file_name)
+# build test ReadRecords
+id1 = '123466'
+df1 = BgDfBuilder().build()
+test_record1 = ReadRecordBuilder().with_id(id1).with_df(df1).build()
+
+id2 = 'ab'
+df2 = BgDfBuilder().build()
+test_record2 = ReadRecordBuilder().with_id(id2).with_df(df2).build()
+
+id3 = '456'
+df3 = BgDfBuilder().build()
+test_record3 = ReadRecordBuilder().with_id(id3).with_df(df3).build()
+records = [test_record1, test_record2, test_record3]
 
 
-@pytest.mark.parametrize("read_function", [read_all_bg, read_all_device_status])
-def test_write_read_record(input_file, tmp_path, read_function):
-    # Setup configuration
-    config = Configuration()
-    config.data_dir = str(input_file.parent)  # Set the data directory
+def per_id_files():
+    return glob.glob(str(Path(per_id_folder).resolve()) + "/*/*.csv")
 
-    # Generate records using the read function
-    records = read_function(config)
+def sub_df_for_id(df, ids):
+    result = df.loc[df['id'] == ids].drop(columns=['id'])
+    result.reset_index(inplace=True, drop=True)
+    return result
 
-    # Ensure records are valid
-    assert isinstance(records, list), "Records should be a list"
-    assert len(records) > 0, "Records list should not be empty"
+def read_df_from_csv(file):
+    time_col = 'time'
+    df = pd.read_csv(file, index_col=[0])
+    df[time_col] = pd.to_datetime(df[time_col])
+    df['id'] = df['id'].astype("string")
+    df.sort_values(by=time_col, inplace=True)
+    return df
 
-    # Test writing as a flat file
-    flat_folder = tmp_path / "flat"
-    flat_folder.mkdir()
-    flat_file_name = "test_flat.csv"
-    write_read_record(records, as_flat_file=True, folder=flat_folder, file_name=flat_file_name)
-    flat_file_path = flat_folder / flat_file_name
-    assert flat_file_path.exists(), "Flat file should be created"
 
-    # Validate flat file content
-    flat_df = pd.read_csv(flat_file_path)
-    assert not flat_df.empty, "Flat file should not be empty"
-    assert "time" in flat_df.columns or "created_at" in flat_df.columns, "Timestamp column should exist"
+@pytest.fixture(autouse=True)
+def run_before_and_after_tests(tmpdir):
+    # Setup:
 
-    # Test writing per ID
-    per_id_folder = tmp_path / "per_id"
-    per_id_folder.mkdir()
-    per_id_file_name = "test_per_id.csv"
-    write_read_record(records, as_flat_file=False, folder=per_id_folder, file_name=per_id_file_name)
+    yield  # this is where the testing happens
+    # Teardown:
+    flat_file_path.unlink(True)
+    # delete csv files
+    for file in per_id_files():
+        Path(file).unlink(True)
+    directory = Path(per_id_folder)
+    # delete id directories
+    if directory.exists():
+        for item in directory.iterdir():
+            item.rmdir()
+        # delete directory itself
+        directory.rmdir()
 
-    # Validate per ID files
+
+def test_writes_multiple_read_records_as_flat_dataframe():
+    # write as flat csv
+    write_read_record(records, True, folder, flat_file_name)
+
+    # read from csv
+    df = read_df_from_csv(flat_file_path)
+    # all three ids were written
+    assert df.shape == (30, 3)
+    pd.testing.assert_frame_equal(sub_df_for_id(df, id1), df1, check_dtype=False)
+    pd.testing.assert_frame_equal(sub_df_for_id(df, id2), df2, check_dtype=False)
+    pd.testing.assert_frame_equal(sub_df_for_id(df, id3), df3, check_dtype=False)
+
+
+def test_writes_flat_dataframe_containing_only_columns_kept():
+    # write csv files
+    keep_columns = ['time']
+    write_read_record(records, True, folder, flat_file_name, keep_cols=keep_columns)
+
+    # read from written file
+    df = read_df_from_csv(flat_file_path)
+
+    assert set(df.columns) == {'id', 'time'}
+
+
+def test_writes_csv_per_id():
+    # write csv files
+    write_read_record(records, False, per_id_folder, flat_file_name)
+
+    # read
+    filepaths = per_id_files()
+    assert len(filepaths) == 3
+
     for record in records:
-        per_id_file_path = per_id_folder / record.zip_id / per_id_file_name
-        assert per_id_file_path.exists(), f"File for ID {record.zip_id} should be created"
-        per_id_df = pd.read_csv(per_id_file_path)
-        assert not per_id_df.empty, f"File for ID {record.zip_id} should not be empty"
-        assert "time" in per_id_df.columns or "created_at" in per_id_df.columns, "Timestamp column should exist"
+        files_for_id = [file for file in filepaths if record.zip_id in file]
+        df = read_df_from_csv(files_for_id[0])
+        pd.testing.assert_frame_equal(record.df_with_id(), df,
+                                      check_dtype=False)
+
+
+def test_writes_csv_per_id_only_containing_columns_kept():
+    # write csv files
+    keep_columns = ['time']
+    write_read_record(records, False, per_id_folder, flat_file_name, keep_cols=keep_columns)
+
+    # read from written files
+    filepaths = per_id_files()
+
+    for record in records:
+        files_for_id = [file for file in filepaths if record.zip_id in file]
+        df = read_df_from_csv(files_for_id[0])
+        assert set(df.columns) == {'id', 'time'}
+
