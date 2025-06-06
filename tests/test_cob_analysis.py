@@ -283,7 +283,7 @@ def test_remove_zero_or_null_days():
         remove_zero_or_null_days(df_not_dt, 'value')
 
     df = pd.DataFrame({'value': [0, 0, np.nan, 5, 0, 1]},
-                      index=pd.date_range('2024-01-01', periods=6, freq='12H'))
+                      index=pd.date_range('2024-01-01', periods=6, freq='12h'))
 
     result = remove_zero_or_null_days(df, 'value')
     expected_dates = pd.to_datetime(['2024-01-02 00:00:00',

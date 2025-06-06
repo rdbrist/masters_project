@@ -7,8 +7,9 @@ from src.data_processing.write import write_read_record
 from tests.helper.BgDfBuilder import BgDfBuilder
 from tests.helper.ReadRecordBuilder import ReadRecordBuilder
 
-folder = 'test_data/'
-per_id_folder = 'test_data/per_id/'
+
+folder = Path(__file__).parent / 'test_data/'
+per_id_folder = folder / 'per_id'
 flat_file_name = 'some_flat_file.csv'
 flat_file_path = Path(folder, flat_file_name)
 # build test ReadRecords
