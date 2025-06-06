@@ -107,11 +107,9 @@ def read_all(config: Configuration,
         if file.endswith(config.android_aps_zip):
             continue
         if (config.limit_to_2023_subset and
-                any(str(s) not in file for s in
-                    config.zip_ids_2023_subset)):
-            continue
-        read_record = function(file, config)
-        read_records.append(read_record)
+                any(str(s) in file for s in config.zip_ids_2023_subset)):
+            read_record = function(file, config)
+            read_records.append(read_record)
     return read_records
 
 
@@ -623,7 +621,6 @@ def parse_standard_date(treat_timezone, date_str):
                 new_dt = ensure_utc(new_dt)
             return new_dt
         except ValueError:
-            logger.info(f'Could not parse date {date_str}: {date_str}')
             continue
 
     return pd.NaT

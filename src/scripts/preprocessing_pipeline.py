@@ -2,8 +2,7 @@ import time
 import pandas as pd
 from datetime import timedelta
 
-from src.configurations import (Configuration,
-                                Irregular, FifteenMinute, FiveMinute)
+from src.configurations import Configuration, Irregular, FifteenMinute
 from src.data_processing.read import (read_all_device_status,
                                       get_all_offsets_df_from_profiles)
 from src.data_processing.write import write_read_record
@@ -18,7 +17,6 @@ def main():
     start_time = time.time()
     config = Configuration()
     keep_cols = config.keep_columns
-    keep_ids = config.get_list_of_permitted_zip_ids()
 
     # ----------------------Write consolidated flat file------------------------
     as_flat_file = True
@@ -51,7 +49,6 @@ def main():
 
     # -----------Write resampled files for 5 & 15 min intervals-----------------
     fifteen_minute = FifteenMinute()
-    five_minute = FiveMinute()
 
     resampled_dfs = {
         'fifteen_minute': [],
@@ -64,21 +61,16 @@ def main():
         resampler = ResampleDataFrame(group)
         resampled_dfs['fifteen_minute'].append(
             resampler.resample_to(fifteen_minute))
-        resampled_dfs['five_minute'].append(
-            resampler.resample_to(five_minute))
 
     # Concatenate and write each resampled DataFrame
     (pd.concat(resampled_dfs['fifteen_minute']).
      reset_index(drop=True).
      to_csv(INTERIM_DATA_DIR / fifteen_minute.csv_file_name(), index=False))
-    (pd.concat(resampled_dfs['five_minute']).
-     reset_index(drop=True).
-     to_csv(INTERIM_DATA_DIR / five_minute.csv_file_name(), index=False))
 
     print(f'Completed writing resampled flat file(s) in '
           f'{timedelta(seconds=(time.time() - start_time))}')
 
-    # ----------------Adjust datetimes by offsets to localise times-------------
+    # ----------------Adjust timestamps by offsets to localise times-------------
 
     # Get offsets from profiles - limited to individuals with one timezone
     profile_offsets = get_all_offsets_df_from_profiles(config)
@@ -88,10 +80,11 @@ def main():
                        set_index('id'))
     profile_offsets.to_csv(INTERIM_DATA_DIR / 'profile_offsets.csv')
 
-    # Adjust datetimes in the resampled DataFrames
+    # Adjust timestamps in the resampled DataFrames
     cob_fifteen = Cob()
     cob_fifteen.read_interim_data(file_name='15min_iob_cob_bg',
                                   file_type='parquet')
+
     args = {'height': 15, 'distance': 5, 'suppress': True}
     df_cob = cob_fifteen.process_one_tz_individuals(profile_offsets, args)
     df_cob.head()

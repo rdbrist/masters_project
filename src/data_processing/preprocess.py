@@ -5,7 +5,8 @@ from src.configurations import Configuration
 from src.data_processing.read import ReadRecord
 
 
-def dedup_device_status_dataframes(read_records: [ReadRecord]):
+def dedup_device_status_dataframes(read_records: [ReadRecord]) \
+        -> list[ReadRecord]:
     """
     Remove duplicates of rows when the only unique data from row to row is id,
     created_at and device
