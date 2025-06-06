@@ -41,13 +41,13 @@ def resample_irregular_flat_file(flat_file_path, output_folder):
     # Concatenate and write each resampled DataFrame
     Path(output_folder).mkdir(parents=True, exist_ok=True)
     pd.concat(resampled_dfs['daily']).reset_index(drop=True).to_csv(
-        Path(output_folder, daily.csv_file_name()), index=False)
+        Path(output_folder, daily.file_name()), index=False)
     pd.concat(resampled_dfs['hourly']).reset_index(drop=True).to_csv(
-        Path(output_folder, hourly.csv_file_name()), index=False)
+        Path(output_folder, hourly.file_name()), index=False)
     pd.concat(resampled_dfs['fifteen_minute']).reset_index(drop=True).to_csv(
-        Path(output_folder, fifteen_minute.csv_file_name()), index=False)
+        Path(output_folder, fifteen_minute.file_name()), index=False)
     pd.concat(resampled_dfs['five_minute']).reset_index(drop=True).to_csv(
-        Path(output_folder, five_minute.csv_file_name()), index=False)
+        Path(output_folder, five_minute.file_name()), index=False)
 
 
 def main():
@@ -83,7 +83,7 @@ def main():
             if len(missing_zipids) == len(zip_ids):
                 try:
                     resample_irregular_flat_file(
-                        flat_file_folder / irregular.csv_file_name(),
+                        flat_file_folder / irregular.file_name(),
                         flat_file_folder)
                     return
                 except Exception as e:
@@ -104,16 +104,16 @@ def main():
 
         # write pre id
         daily_resampled_file_name = (
-            Path(per_id_folder, zip_id, daily.csv_file_name()))
+            Path(per_id_folder, zip_id, daily.file_name()))
         daily_df.to_csv(daily_resampled_file_name)
         hourly_resampled_file_name = (
-            Path(per_id_folder, zip_id, hourly.csv_file_name()))
+            Path(per_id_folder, zip_id, hourly.file_name()))
         hourly_df.to_csv(hourly_resampled_file_name)
         fifteen_resampled_file_name = (
-            Path(per_id_folder, zip_id, fifteen_minute.csv_file_name()))
+            Path(per_id_folder, zip_id, fifteen_minute.file_name()))
         fifteen_minute_df.to_csv(fifteen_resampled_file_name)
         five_resampled_file_name = (
-            Path(per_id_folder, zip_id, five_minute.csv_file_name()))
+            Path(per_id_folder, zip_id, five_minute.file_name()))
         five_minute_df.to_csv(five_resampled_file_name)
 
         # add to overall dataframe
@@ -143,16 +143,16 @@ def main():
 
     # write flat_file dfs
     daily_resampled_file_name = (
-        Path(flat_file_folder, daily.csv_file_name()))
+        Path(flat_file_folder, daily.file_name()))
     big_daily_df.to_csv(daily_resampled_file_name)
     hourly_resampled_file_name = (
-        Path(flat_file_folder, hourly.csv_file_name()))
+        Path(flat_file_folder, hourly.file_name()))
     big_hourly_df.to_csv(hourly_resampled_file_name)
     fifteen_minute_resampled_file_name = (
-        Path(flat_file_folder, fifteen_minute.csv_file_name()))
+        Path(flat_file_folder, fifteen_minute.file_name()))
     big_fifteen_minute_df.to_csv(fifteen_minute_resampled_file_name)
     five_minute_resampled_file_name = (
-        Path(flat_file_folder, five_minute.csv_file_name()))
+        Path(flat_file_folder, five_minute.file_name()))
     big_five_minute_df.to_csv(five_minute_resampled_file_name)
 
     print('Number of zip ids without irregular device status files: '

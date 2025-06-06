@@ -1,6 +1,7 @@
 import time
 import pandas as pd
 from datetime import timedelta
+from loguru import logger
 
 from src.configurations import Configuration, Irregular, FifteenMinute
 from src.data_processing.read import (read_all_device_status,
@@ -42,30 +43,27 @@ def main():
     write_read_record(de_dup_result,
                       as_flat_file,
                       INTERIM_DATA_DIR,
-                      Irregular.csv_file_name(),
+                      Irregular.file_name(),
                       keep_cols=config.keep_columns)
     print(f'Completed writing processed (irregular) flat file in '
           f'{timedelta(seconds=(time.time() - start_time))}')
 
-    # -----------Write resampled files for 5 & 15 min intervals-----------------
+    # -----------Write resampled files for 15 min intervals-----------------
     fifteen_minute = FifteenMinute()
 
-    resampled_dfs = {
-        'fifteen_minute': [],
-        'five_minute': []
-    }
+    fifteen_min_dfs = []
 
     df = as_flat_dataframe(de_dup_result, drop_na=False, keep_cols=keep_cols)
 
     for zip_id, group in df.groupby('id'):
         resampler = ResampleDataFrame(group)
-        resampled_dfs['fifteen_minute'].append(
+        fifteen_min_dfs.append(
             resampler.resample_to(fifteen_minute))
 
-    # Concatenate and write each resampled DataFrame
-    (pd.concat(resampled_dfs['fifteen_minute']).
+    # Concatenate and write resampled DataFrame
+    (pd.concat(fifteen_min_dfs).
      reset_index(drop=True).
-     to_csv(INTERIM_DATA_DIR / fifteen_minute.csv_file_name(), index=False))
+     to_parquet(INTERIM_DATA_DIR / fifteen_minute.file_name('parquet'), index=False))
 
     print(f'Completed writing resampled flat file(s) in '
           f'{timedelta(seconds=(time.time() - start_time))}')
@@ -81,13 +79,14 @@ def main():
     profile_offsets.to_csv(INTERIM_DATA_DIR / 'profile_offsets.csv')
 
     # Adjust timestamps in the resampled DataFrames
-    cob_fifteen = Cob()
-    cob_fifteen.read_interim_data(file_name='15min_iob_cob_bg',
+    cob = Cob()
+    cob.read_interim_data(file_name='15min_iob_cob_bg',
                                   file_type='parquet')
 
     args = {'height': 15, 'distance': 5, 'suppress': True}
-    df_cob = cob_fifteen.process_one_tz_individuals(profile_offsets, args)
-    df_cob.head()
+    df_cob = cob.process_one_tz_individuals(profile_offsets, args)
+    logger.info(f'Processed COB data for one timezone individuals: '
+                f'{len(df_cob)} records remaining after processing.')
 
 
 if __name__ == "__main__":

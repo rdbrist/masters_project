@@ -76,9 +76,8 @@ class Resampling:
     general_agg_cols_dictionary = {GeneralisedCols.id: 'first',
                                    GeneralisedCols.system: 'first',
                                    }
-
     @staticmethod
-    def csv_file_name():
+    def file_name():
         return ''
 
 
@@ -87,8 +86,11 @@ class Irregular(Resampling):
     description = 'None'
 
     @staticmethod
-    def csv_file_name():
-        return 'irregular_iob_cob_bg.csv'
+    def file_name(filetype: str = 'csv'):
+        if filetype == 'csv':
+            return 'irregular_iob_cob_bg.csv'
+        elif filetype == 'parquet':
+            return 'irregular_iob_cob_bg.parquet'
 
 
 @dataclass
@@ -101,9 +103,11 @@ class Hourly(Resampling):
     description = 'Hourly'
 
     @staticmethod
-    def csv_file_name():
-        return 'hourly_iob_cob_bg.csv'
-
+    def file_name(filetype: str = 'csv'):
+        if filetype == 'csv':
+            return 'hourly_iob_cob_bg.csv'
+        elif filetype == 'parquet':
+            return 'hourly_iob_cob_bg.parquet'
 
 @dataclass
 class FifteenMinute(Resampling):
@@ -115,8 +119,11 @@ class FifteenMinute(Resampling):
     description = 'FifteenMinute'
 
     @staticmethod
-    def csv_file_name():
-        return '15min_iob_cob_bg.csv'
+    def file_name(filetype: str = 'csv'):
+        if filetype == 'csv':
+            return '15min_iob_cob_bg.csv'
+        elif filetype == 'parquet':
+            return '15min_iob_cob_bg.parquet'
 
 
 @dataclass
@@ -129,8 +136,11 @@ class FiveMinute(Resampling):
     description = 'FiveMinute'
 
     @staticmethod
-    def csv_file_name():
-        return '5min_iob_cob_bg.csv'
+    def file_name(filetype: str = 'csv'):
+        if filetype == 'csv':
+            return '5min_iob_cob_bg.csv'
+        elif filetype == 'parquet':
+            return '5min_iob_cob_bg.parquet'
 
 
 @dataclass
@@ -142,8 +152,11 @@ class Daily(Resampling):
     description = 'Daily'
 
     @staticmethod
-    def csv_file_name():
-        return 'daily_iob_cob_bg.csv'
+    def file_name(filetype: str = 'csv'):
+        if filetype == 'csv':
+            return 'daily_iob_cob_bg.csv'
+        elif filetype == 'parquet':
+            return 'daily_iob_cob_bg.parquet'
 
 
 @dataclass

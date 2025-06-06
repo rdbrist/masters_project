@@ -19,7 +19,7 @@ def main():
     write_read_record(de_dup_result,
                       as_flat_file,
                       folder,
-                      Irregular.csv_file_name(),
+                      Irregular.file_name(),
                       keep_cols=config.keep_columns)
 
 

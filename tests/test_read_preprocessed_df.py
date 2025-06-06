@@ -9,7 +9,7 @@ def mock_config(mocker, tmp_path):
     # Mock the Configuration class
     mock_config = mocker.patch("src.configurations.Configuration")
     mock_config.return_value.perid_data_folder = tmp_path / "per_id"
-    mock_config.return_value.flat_preprocessed_file_for = lambda sampling: tmp_path / f"{sampling.csv_file_name()}"
+    mock_config.return_value.flat_preprocessed_file_for = lambda sampling: tmp_path / f"{sampling.file_name()}"
     return mock_config
 
 @pytest.fixture
