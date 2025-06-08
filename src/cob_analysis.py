@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from pathlib import Path
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 from sklearn.preprocessing import StandardScaler
 from loguru import logger
@@ -73,6 +74,14 @@ class Cob:
             elif file_type == 'parquet':
                 path = self.data_file_path / (file_name + '.parquet')
                 self.dataset = pd.read_parquet(path)
+                self.dataset.reset_index()
+                self.dataset['id'] = self.dataset['id'].astype(int)
+                self.dataset['datetime'] = (
+                    pd.to_datetime(self.dataset['datetime']))
+                self.dataset = self.dataset.set_index(['id', 'datetime'])
+                if not isinstance(self.dataset.index, pd.MultiIndex) or \
+                        self.dataset.index.names != ['id', 'datetime']:
+                    self.dataset = self.dataset.set_index(['id', 'datetime'])
             else:
                 raise ValueError("Invalid file type. "
                                  "Must be 'csv' or 'parquet'.")
@@ -85,11 +94,39 @@ class Cob:
                       f"consistent.")
                 raise ValueError
         except FileNotFoundError:
-            raise FileNotFoundError('File not found.')
+            raise FileNotFoundError(f'File not found in path: {path}')
         except pd.errors.EmptyDataError as e:
             print(f"No data: {e}")
         except Exception as e:
             raise e
+
+    def read_processed_data(self, file_name: Path,
+                            sampling_rate: int = 15,
+                            offset_processed: bool = False):
+        """
+        Read an already processed dataset into processed_dataset. Only parquet
+        files currently accepted, based on the fact these retain types and
+        indices making the function simpler.
+        :param file_name: Path, filename for the processed data.
+        :param sampling_rate: int, sampling rate for the processed data.
+        :param offset_applied: bool, flag whether the offset has already been
+        applied.
+        :return:
+        """
+        self.sampling_rate = sampling_rate
+        self.offset_processed = offset_processed
+        try:
+            self.processed_dataset = pd.read_parquet(file_name)
+            print(f'Number of records: {len(self.processed_dataset)}')
+            print(f"Number of people: "
+                  f"{len(self.processed_dataset.index.get_level_values('id').drop_duplicates())}")
+            print(f"Number of days: {len(self.processed_dataset['day'].drop_duplicates())}")
+        except FileNotFoundError as e:
+            raise FileNotFoundError(f'File not found in path: {file_name}')
+        except pd.errors.EmptyDataError as e:
+            print(f"No data: {e}")
+        except Exception as e:
+            print(f"An error occurred: {e}")
 
     @staticmethod
     def _check_consecutive_intervals(datetime_series: pd.Series,
@@ -273,9 +310,7 @@ class Cob:
                                           distance=d)
         df_cob['peak'] = 0
         df_cob.loc[df_cob.index[peaks], 'peak'] = 1
-        logger.info(f'\n{len(peaks)} peaks identified using parameters h={h} '
-                    f'and d={d}, and added to individual_dataset as a new '
-                    f'column.')
+        logger.info(f'\n{len(peaks)} peaks identified using h={h} and d={d}')
 
         self.individual_dataset = df_cob
 
@@ -503,9 +538,19 @@ class Cob:
         self.interpolated = None
 
         ignored = 0
+
+        if isinstance(self.dataset.index, pd.MultiIndex):
+            for name, level in zip(self.dataset.index.names, self.dataset.index.levels):
+                print(f"Level '{name}': {level.dtype}")
+        else:
+            print(f"Index dtype: {self.dataset.index.dtype}")
+
+        print(self.dataset.index.get_level_values('id').unique())
+
+
         for p_id in ids:
-            logger.info('Processing ID:', p_id)
-            if p_id not in self.dataset.index.get_level_values('id').values:
+            logger.info(f'Processing ID: {p_id}')
+            if p_id not in self.dataset.index.get_level_values('id').unique():
                 logger.info(f'Individual {p_id} not found in dataset, '
                             f'ignoring.')
                 ignored += 1
@@ -525,15 +570,14 @@ class Cob:
                                        reset_index(names='datetime').
                                        set_index(['id', 'datetime']))
             df_all = pd.concat([df_all, self.individual_dataset])
+            df_all.index.freq = str(self.sampling_rate) + 'min'
+
             # Reset individual dataset for next iteration
             self.individual_dataset = None
             self.interpolated = False
             self.individual = None
 
             self.processed_dataset = df_all
-            df_all.index.freq = str(self.sampling_rate) + 'min'
-            df_all.to_parquet(self.data_file_path /
-                              'processed_cob_data.parquet')
 
         if not suppress:
             if ignored > 0:
@@ -551,26 +595,6 @@ class Cob:
         self.offset_processed = False
 
         return df_all
-
-    def read_processed_data(self):
-        """
-        Read processed data from parquet file and summarise basic statistics.
-        """
-        try:
-            self.processed_dataset = (
-                pd.read_parquet(
-                    self.data_file_path / 'processed_cob_data.parquet'))
-            df = self.processed_dataset.copy()
-            print(f'Number of records: {len(df)}')
-            print(f"Number of people: "
-                  f"{len(df.index.get_level_values('id').drop_duplicates())}")
-            print(f"Number of days: {len(df['day'].drop_duplicates())}")
-        except FileNotFoundError as e:
-            print(f"File not found: {e}")
-        except pd.errors.EmptyDataError as e:
-            print(f"No data: {e}")
-        except Exception as e:
-            print(f"An error occurred: {e}")
 
     def remove_zero_peak_days(self, variable: str = 'cob interpolate',
                               suppress: bool = False):

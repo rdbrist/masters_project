@@ -21,12 +21,13 @@ def as_flat_dataframe(records: [ReadRecord],
         if df is None:
             continue
 
+        # Drop all NaN columns to avoid FutureWarning
+        df = df.dropna(how='all', axis=1)
+
         # concat to resulting df
         if result is None:
             result = df
         else:
-            # Drop all NaN columns to avoid FutureWarning
-            df = df.dropna(how='all', axis=1)
             result = pd.concat([result, df])
 
     # drop nan
