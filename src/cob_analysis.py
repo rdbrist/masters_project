@@ -109,7 +109,7 @@ class Cob:
         indices making the function simpler.
         :param file_name: Path, filename for the processed data.
         :param sampling_rate: int, sampling rate for the processed data.
-        :param offset_applied: bool, flag whether the offset has already been
+        :param offset_processed: bool, flag whether the offset has already been
         applied.
         :return:
         """
@@ -671,39 +671,15 @@ class Cob:
             print('Offset already processed. Returning existing '
                   'processed_dataset.')
             return self.processed_dataset
-        if profile_offsets.index.duplicated().any():
-            raise ValueError("Profile offsets DataFrame contains duplicate IDs."
-                             " Please ensure each ID is unique such that only"
-                             " one offset exists.")
-        zip_ids = profile_offsets.index.unique()
+
+
 
         # We are preparing this for further processing in models, so we need a
         # consistent range of intervals, irrespective of zero day gaps
+        zip_ids = profile_offsets.index.unique()
         self.pre_process_batch(ids=zip_ids, remove_zero_days=False, **args)
 
-        # Check for missing ids before mapping
-        missing_ids = (
-                set(self.processed_dataset.index.get_level_values('id')) -
-                set(profile_offsets.index))
-        if missing_ids:
-            raise ValueError(f"IDs missing in profile_offsets: {missing_ids}")
 
-        self.processed_dataset['offset'] = (
-            self.processed_dataset.
-            index.get_level_values('id').
-            map(profile_offsets['offset']))
-        self.processed_dataset = self.processed_dataset.reset_index()
-        self.processed_dataset['datetime'] = (
-                self.processed_dataset['datetime'] +
-                self.processed_dataset['offset'].
-                apply(lambda h: timedelta(hours=h)))
-        self.processed_dataset['day'] = (
-            self.processed_dataset['datetime'].dt.date)
-        self.processed_dataset['time'] = (
-            self.processed_dataset['datetime'].dt.time)
-        self.processed_dataset = (self.processed_dataset.
-                                  set_index(['id', 'datetime']).
-                                  sort_index())
         self.offset_processed = True
         return self.processed_dataset
 
@@ -807,45 +783,4 @@ def hierarchical_clustering(summary_df: pd.DataFrame,
 
     return summary_df
 
-def remove_zero_or_null_days(df: pd.DataFrame, value_col: str) -> pd.DataFrame:
-    """
-    Keep only days where all values where at least one of the timestamps is
-    non-zero or non-null.
-    :param df: DataFrame with DatetimeIndex.
-    :param value_col: Name of the column to check.
-    :return: Filtered DataFrame.
-    """
-    if not isinstance(df.index, pd.DatetimeIndex):
-        raise ValueError("DataFrame index must be a DatetimeIndex.")
 
-    # Find days where all values are non-zero and non-null
-    mask = df.groupby(df.index.date)[value_col].apply(
-        lambda x: (x.notnull() & (x != 0)).any()
-    )
-    logger.info(f'Masking {mask.sum()} days with non-zero or non-null values'
-                f'from {len(df.groupby(df.index.date))} total days.')
-    keep_dates = set(mask[mask].index)
-    date_mask = np.array([d in keep_dates for d in df.index.date])
-    return df[date_mask]
-
-def split_on_time_gaps(df: pd.DataFrame,
-                       value_col: str,
-                       days_threshold: int = 3) -> list:
-    """
-    Removes days with all zero or null values, then splits DataFrame at gaps in
-    the DatetimeIndex
-    greater than days_threshold.
-    :param df: DataFrame with a DatetimeIndex.
-    :param value_col: Name of the column to check for zero or null values.
-    :param days_threshold: Number of days to consider as a gap.
-    :return: List of DataFrames, each representing a continuous segment of the
-    time series.
-    """
-    # Remove days with all zero or null values
-    df = remove_zero_or_null_days(df, value_col)
-    if not isinstance(df.index, pd.DatetimeIndex):
-        raise ValueError("DataFrame index must be a DatetimeIndex.")
-    df = df.sort_index()
-    gaps = df.index.to_series().diff().dt.days.fillna(0)
-    group = (gaps > days_threshold).cumsum()
-    return [group_df for _, group_df in df.groupby(group) if not group_df.empty]

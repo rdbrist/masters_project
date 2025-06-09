@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import time
+import numpy as np
+from loguru import logger
 
 from sklearn.metrics import mean_absolute_error
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
@@ -142,3 +144,48 @@ def run_adf(df):
           "hypothesis and the series is stationary.")
     print("A more negative test statistic indicates stronger evidence against "
           "the null hypothesis.")
+
+def split_on_time_gaps(df: pd.DataFrame,
+                       value_col: str,
+                       days_threshold: int = 3) -> list:
+    """
+    Removes days with all zero or null values, then splits DataFrame at gaps in
+    the DatetimeIndex. Expects a dataframe without the id index, only datetime.
+    greater than days_threshold.
+    :param df: DataFrame with a DatetimeIndex.
+    :param value_col: Name of the column to check for zero or null values.
+    :param days_threshold: Number of days to consider as a gap.
+    :return: List of DataFrames, each representing a continuous segment of the
+    time series.
+    """
+    # Remove days with all zero or null values
+    df = remove_zero_or_null_days(df, value_col)
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError("DataFrame index must be a DatetimeIndex.")
+    df = df.sort_index()
+    gaps = df.index.to_series().diff().dt.days.fillna(0)
+    group = (gaps > days_threshold).cumsum()
+    return [group_df for _, group_df in df.groupby(group) if not group_df.empty]
+
+def remove_zero_or_null_days(df: pd.DataFrame, value_col: str) -> pd.DataFrame:
+    """
+    Keep only days where all values where at least one of the timestamps is
+    non-zero or non-null.
+    :param df: DataFrame with DatetimeIndex.
+    :param value_col: Name of the column to check.
+    :return: Filtered DataFrame.
+    """
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError("DataFrame index must be a DatetimeIndex.")
+
+    # Find days where all values are non-zero and non-null
+    mask = df.groupby(df.index.date)[value_col].apply(
+        lambda x: (x.notnull() & (x != 0)).any()
+    )
+    logger.info(f'Masking {mask.sum()} days with non-zero or non-null values'
+                f'from {len(df.groupby(df.index.date))} total days.')
+    keep_dates = set(mask[mask].index)
+    date_mask = np.array([d in keep_dates for d in df.index.date])
+    return df[date_mask]
+
+

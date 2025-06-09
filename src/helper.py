@@ -3,8 +3,10 @@
 # calculates a df of all the different read records
 import dataclasses
 import glob
-from pathlib import Path
 import pandas as pd
+from typing import Tuple, List
+from pathlib import Path
+
 from src.configurations import Configuration, Resampling
 
 
@@ -55,3 +57,51 @@ def preprocessed_file_for(folder, zip_id: str, sampling: Resampling):
 
 def flat_preprocessed_file_for(folder, sampling: Resampling):
     return Path(folder / sampling.file_name())
+
+
+def check_df_index(df: pd.DataFrame = None) -> pd.DataFrame:
+    """
+    Carries out checks on the dataframe index to ensure that it complies to both
+    naming and datatype, i.e. {'id':int, 'datetime':datetime}
+    :param df: Dataframe to be checked
+    :return: Dataframe following correction, or return the same dataframe.
+    """
+    if df is None:
+        raise TypeError('No dataframe provided in check_df_index()')
+    if not isinstance(df.index, pd.MultiIndex):
+        try:
+            df['id'] = df['id'].astype(int)
+            df.set_index(['id', 'datetime'], inplace=True)
+        except:
+            raise ValueError("DataFrame index must be a MultiIndex")
+    if list(df.index.names) != ["id", "datetime"]:
+        raise ValueError(
+            "DataFrame index must be a MultiIndex with levels "
+            "['id', 'datetime'].")
+    id_level = df.index.get_level_values('id')
+    datetime_level = df.index.get_level_values('datetime')
+    if not pd.api.types.is_integer_dtype(id_level):
+        raise ValueError("Index level 'id' must be of integer dtype.")
+    if not pd.api.types.is_datetime64_any_dtype(datetime_level):
+        raise ValueError(
+            "Index level 'datetime' must be of datetime dtype.")
+
+    return df
+
+def separate_flat_file(df: pd.DataFrame) -> List[Tuple[int, pd.DataFrame]]:
+    """
+    Accepts a dataframe with ['id', 'datetime'] index and returns a list of
+    tuples, holding the id as the first term and the dataframe (with only a
+     datetime index) as the second term.
+    :param df: Dataframe with ['id', 'datetime'] multi level index
+    :return: List of tuples (int, pd.DataFrame)
+    """
+    df_tuple_by_id = []
+    for group in df.groupby('id'):
+        df_tuple_by_id.append(group)
+
+    for i, (id_val, df) in enumerate(df_tuple_by_id):
+        df = df.reset_index().drop(columns='id').set_index('datetime')
+        df_tuple_by_id[i] = (id_val, df)
+
+    return df_tuple_by_id

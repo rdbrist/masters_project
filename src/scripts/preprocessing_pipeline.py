@@ -17,13 +17,13 @@ from src.cob_analysis import Cob
 def main():
     start_time = time.time()
     config = Configuration()
-    keep_cols = config.keep_columns
     fifteen_minute = FifteenMinute()
     resampled_parquet_file = (INTERIM_DATA_DIR /
                               fifteen_minute.file_name('parquet'))
     cob = Cob()
 
-    # ----------------------Write consolidated flat file------------------------
+    # STAGE 1 : Write consolidated flat file
+    # -------------------------------------------------------------------------
     as_flat_file = True
 
     if not resampled_parquet_file.exists():
@@ -41,7 +41,8 @@ def main():
         print(f'Completed writing device status flat file in '
               f'{timedelta(seconds=(time.time() - start_time))}')
 
-        # ---------------------Write processed irregular file-------------------
+        # STAGE 2 : Write processed irregular file
+        # ---------------------------------------------------------------------
         de_dup_result = dedup_device_status_dataframes(result)
 
         # write irregular
@@ -53,7 +54,8 @@ def main():
         print(f'Completed writing processed (irregular) flat file in '
               f'{timedelta(seconds=(time.time() - start_time))}')
 
-        # -----------Write resampled files for 15 min intervals-----------------
+        # STAGE 3 : Write resampled files for 15 min intervals
+        # ---------------------------------------------------------------------
         fifteen_min_dfs = []
 
         df = as_flat_dataframe(de_dup_result, drop_na=False,
@@ -70,7 +72,8 @@ def main():
         print(f'Completed writing resampled flat file(s) in '
               f'{timedelta(seconds=(time.time() - start_time))}')
 
-    # ----------------Adjust timestamps by offsets to localise times------------
+    # STAGE 4 : Adjust timestamps by offsets to localise times
+    # -------------------------------------------------------------------------
     cob.read_interim_data(file_name='15min_iob_cob_bg',
                                   file_type='parquet')
 

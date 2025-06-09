@@ -4,6 +4,7 @@ import joblib
 from sklearn.preprocessing import FunctionTransformer, MinMaxScaler
 
 from src.configurations import Configuration
+from src.helper import check_df_index
 
 
 class FeatureSet:
@@ -31,25 +32,12 @@ class FeatureSet:
             raise FileNotFoundError(f'File {self.input_path} not found.')
         except Exception as e:
             raise e
-        if not isinstance(df.index, pd.MultiIndex):
-            try:
-                df['id'] = df['id'].astype(int)
-                df.set_index(['id','datetime'], inplace=True)
-            except:
-                raise ValueError("DataFrame index must be a MultiIndex")
-        if list(df.index.names) != ["id", "datetime"]:
-            raise ValueError(
-                "DataFrame index must be a MultiIndex with levels "
-                "['id', 'datetime'].")
-        id_level = df.index.get_level_values('id')
-        datetime_level = df.index.get_level_values('datetime')
+
+        df = check_df_index(df)
+
         if 'system' in df.columns:
             df.drop('system', axis=1, inplace=True)
-        if not pd.api.types.is_integer_dtype(id_level):
-            raise ValueError("Index level 'id' must be of integer dtype.")
-        if not pd.api.types.is_datetime64_any_dtype(datetime_level):
-            raise ValueError(
-                "Index level 'datetime' must be of datetime dtype.")
+
         self.dataset = df.sort_index(level=['id', 'datetime'])
 
     def add_day_type(self):
@@ -118,8 +106,6 @@ class FeatureSet:
 
         def cos_transformer(period):
             return FunctionTransformer(lambda x: np.cos(x / period * 2 * np.pi))
-
-
 
         self.dataset['hour_of_day'] = (self.dataset.index.
                                        get_level_values('datetime').
