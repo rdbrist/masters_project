@@ -1,8 +1,10 @@
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import FunctionTransformer
+import joblib
+from sklearn.preprocessing import FunctionTransformer, MinMaxScaler
 
 from src.configurations import Configuration
+
 
 class FeatureSet:
     """
@@ -11,6 +13,7 @@ class FeatureSet:
     """
     def __init__(self, dataset=None, input_path=None):
         self.dataset = dataset
+        self.scaler = None
         config = Configuration()
         if input_path is not None:
             self.input_path = input_path
@@ -21,14 +24,6 @@ class FeatureSet:
         if self.dataset is None:
             self.load_preprocessed_data()
 
-        # Add all features
-        self.add_time_based_features()
-        self.add_day_type()
-        self.add_rate_of_change()
-
-        # Export file for reference and use
-        self.export_features_file()
-
     def load_preprocessed_data(self):
         try:
             df = pd.read_parquet(self.input_path)
@@ -37,13 +32,19 @@ class FeatureSet:
         except Exception as e:
             raise e
         if not isinstance(df.index, pd.MultiIndex):
-            raise ValueError("DataFrame index must be a MultiIndex")
+            try:
+                df['id'] = df['id'].astype(int)
+                df.set_index(['id','datetime'], inplace=True)
+            except:
+                raise ValueError("DataFrame index must be a MultiIndex")
         if list(df.index.names) != ["id", "datetime"]:
             raise ValueError(
                 "DataFrame index must be a MultiIndex with levels "
                 "['id', 'datetime'].")
         id_level = df.index.get_level_values('id')
         datetime_level = df.index.get_level_values('datetime')
+        if 'system' in df.columns:
+            df.drop('system', axis=1, inplace=True)
         if not pd.api.types.is_integer_dtype(id_level):
             raise ValueError("Index level 'id' must be of integer dtype.")
         if not pd.api.types.is_datetime64_any_dtype(datetime_level):
@@ -52,27 +53,54 @@ class FeatureSet:
         self.dataset = df.sort_index(level=['id', 'datetime'])
 
     def add_day_type(self):
-        self.dataset.index.get_level_values('datetime').weekday.map(
-            lambda x: 'weekend' if x >= 5 else 'weekday').astype('category')
+        self.dataset['day_type'] = \
+            (self.dataset.index.
+             get_level_values('datetime').
+             weekday.
+             map(lambda x: 'weekend' if x >= 5 else 'weekday').
+             astype('category'))
         self.dataset = pd.get_dummies(self.dataset, columns=['day_type'],
                                       prefix='day_type')
 
-    def add_rate_of_change(self):
+    def add_rate_of_change(self, columns=None):
+        """
+        Add columns that provide the rate of change for 15min intervals and
+        NaNs where the criteria of sequential 15 min intervals isn't met.
+        :param columns: Columns to have the RoC applied.
+        """
         self.dataset['time_diff'] = (self.dataset.index.
                                      get_level_values('datetime').diff())
         first_idx = ~self.dataset.index.get_level_values('id').duplicated()
         self.dataset.loc[first_idx, 'time_diff'] = np.nan
-        self.dataset.head()
 
         interval = pd.Timedelta('15min')
-        # Then add rate columns
-        for col in ['iob mean', 'cob mean', 'bg mean']:
+        for col in columns:
             value_diff = (self.dataset[col].
                           groupby(self.dataset.index.get_level_values('id')).
                           diff())
             rate_of_change = (value_diff.
                               where(self.dataset['time_diff'] == interval))
             self.dataset[f'{col} rate_of_change'] = rate_of_change
+
+    def add_hourly_mean(self, columns=None):
+        """
+        Adds columns with the hourly mean for specified columns.
+        If columns is None, computes for all numeric columns.
+        :param columns: Columns to have the hourly mean.
+        """
+        if columns is None:
+            columns = self.dataset.select_dtypes(include=[np.number]).columns
+
+        hour_index = self.dataset.index.get_level_values('datetime').hour
+        id_index = self.dataset.index.get_level_values('id')
+
+        for col in columns:
+            hourly_mean = (
+                self.dataset[col]
+                .groupby([id_index, hour_index])
+                .transform('mean')
+            )
+            self.dataset[f'{col} hourly_mean'] = hourly_mean
 
     def add_last_cob_peak(self):
         pass
@@ -91,8 +119,12 @@ class FeatureSet:
         def cos_transformer(period):
             return FunctionTransformer(lambda x: np.cos(x / period * 2 * np.pi))
 
+
+
         self.dataset['hour_of_day'] = (self.dataset.index.
-                                       get_level_values('datetime').hour)
+                                       get_level_values('datetime').
+                                       hour.astype(float))
+
         self.dataset['hour_sin'] = (
             sin_transformer(24).fit_transform(self.dataset)['hour_of_day'])
         self.dataset['hour_cos'] =(
@@ -109,3 +141,19 @@ class FeatureSet:
 
     def export_features_file(self):
         pd.to_csv(self.output_path, index=False)
+
+    def scale_features(self, columns):
+        self.scaler = MinMaxScaler()
+        self.dataset[columns] = self.scaler.fit_transform(self.dataset[columns])
+
+    def inverse_scale_features(self, columns):
+        if self.scaler is None:
+            raise ValueError("Scaler has not been fitted.")
+        self.dataset[columns] = self.scaler.inverse_transform(
+            self.dataset[columns])
+
+    def save_scaler(self, path):
+        joblib.dump(self.scaler, path)
+
+    def load_scaler(self, path):
+        self.scaler = joblib.load(path)

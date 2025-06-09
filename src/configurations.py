@@ -250,6 +250,7 @@ class Configuration:
             INTERIM_DATA_DIR / dedup_flat_device_status_parquet_file_name)
     profile_offsets_csv_file = INTERIM_DATA_DIR / 'profile_offsets.csv'
     feature_set_csv_file = PROCESSED_DATA_DIR / 'feature_set.csv'
+    scaler_file = PROCESSED_DATA_DIR / 'scaler.pkl'
 
     # columns to keep
     # TODO use generalised cols instead

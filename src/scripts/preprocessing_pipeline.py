@@ -65,8 +65,7 @@ def main():
                 resampler.resample_to(fifteen_minute).dropna(how='all', axis=1))
 
         # Concatenate and write resampled DataFrame
-        (pd.concat(fifteen_min_dfs).to_parquet(resampled_parquet_file,
-                                               index=False))
+        pd.concat(fifteen_min_dfs).to_parquet(resampled_parquet_file)
 
         print(f'Completed writing resampled flat file(s) in '
               f'{timedelta(seconds=(time.time() - start_time))}')
