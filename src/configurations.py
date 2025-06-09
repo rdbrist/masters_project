@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from src.config import PROJ_ROOT, INTERIM_DATA_DIR, RAW_DATA_DIR
+from src.config import (PROJ_ROOT, INTERIM_DATA_DIR, RAW_DATA_DIR,
+                        PROCESSED_DATA_DIR)
 
 import pandas as pd
 import yaml
@@ -182,10 +183,10 @@ class Configuration:
     android_upload_info = 'UploadInfo.csv'
     bg_csv_file = 'bg_df.csv'
     bg_parquet_file = 'bg_df.parquet'
-    device_file = 'device_status_deduped.csv'
 
     # device status files
     device_status_csv_file_start = '_devicestatus'
+    device_file = 'device_status_deduped.csv'
     device_status_col_type = {
         'id': str,
         'created_at': str,
@@ -247,7 +248,8 @@ class Configuration:
             INTERIM_DATA_DIR / dedup_flat_device_status_csv_file_name)
     dedup_flat_device_status_parquet_file = (
             INTERIM_DATA_DIR / dedup_flat_device_status_parquet_file_name)
-    profile_offsets_csv_file = (INTERIM_DATA_DIR / 'profile_offsets.csv')
+    profile_offsets_csv_file = INTERIM_DATA_DIR / 'profile_offsets.csv'
+    feature_set_csv_file = PROCESSED_DATA_DIR / 'feature_set.csv'
 
     # columns to keep
     # TODO use generalised cols instead
