@@ -424,7 +424,8 @@ def read_profile_from_zip(file_name, config):
                          read_profile_file_to_df)
 
 
-def read_profile_file_to_df(archive, file, read_record):
+
+def read_profile_file_to_df(archive, file, read_record, _):
     with archive.open(file, mode="r") as header_context:
         text_io_wrapper = TextIOWrapper(header_context, encoding="utf-8")
         header_cols = headers_in_file(text_io_wrapper)

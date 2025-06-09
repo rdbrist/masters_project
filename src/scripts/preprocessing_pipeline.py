@@ -18,59 +18,62 @@ def main():
     start_time = time.time()
     config = Configuration()
     keep_cols = config.keep_columns
+    fifteen_minute = FifteenMinute()
+    resampled_parquet_file = (INTERIM_DATA_DIR /
+                              fifteen_minute.file_name('parquet'))
+    cob = Cob()
 
     # ----------------------Write consolidated flat file------------------------
     as_flat_file = True
 
-    result = read_all_device_status(config)
-    write_read_record(result,
-                      as_flat_file,
-                      INTERIM_DATA_DIR,
-                      config.flat_device_status_csv_file_name,
-                      file_type='csv')
-    write_read_record(result,
-                      as_flat_file,
-                      INTERIM_DATA_DIR,
-                      config.flat_device_status_parquet_file_name,
-                      file_type='parquet')
-    print(f'Completed writing device status flat file in '
-          f'{timedelta(seconds=(time.time() - start_time))}')
+    if not resampled_parquet_file.exists():
+        result = read_all_device_status(config)
+        write_read_record(result,
+                          as_flat_file,
+                          INTERIM_DATA_DIR,
+                          config.flat_device_status_csv_file_name,
+                          file_type='csv')
+        write_read_record(result,
+                          as_flat_file,
+                          INTERIM_DATA_DIR,
+                          config.flat_device_status_parquet_file_name,
+                          file_type='parquet')
+        print(f'Completed writing device status flat file in '
+              f'{timedelta(seconds=(time.time() - start_time))}')
 
-    # ---------------------Write processed irregular file-----------------------
-    de_dup_result = dedup_device_status_dataframes(result)
+        # ---------------------Write processed irregular file-------------------
+        de_dup_result = dedup_device_status_dataframes(result)
 
-    # write irregular
-    write_read_record(de_dup_result,
-                      as_flat_file,
-                      INTERIM_DATA_DIR,
-                      Irregular.file_name(),
-                      keep_cols=config.keep_columns)
-    print(f'Completed writing processed (irregular) flat file in '
-          f'{timedelta(seconds=(time.time() - start_time))}')
+        # write irregular
+        write_read_record(de_dup_result,
+                          as_flat_file,
+                          INTERIM_DATA_DIR,
+                          Irregular.file_name(),
+                          keep_cols=config.keep_columns)
+        print(f'Completed writing processed (irregular) flat file in '
+              f'{timedelta(seconds=(time.time() - start_time))}')
 
-    # -----------Write resampled files for 15 min intervals-----------------
-    fifteen_minute = FifteenMinute()
+        # -----------Write resampled files for 15 min intervals-----------------
+        fifteen_min_dfs = []
 
-    fifteen_min_dfs = []
+        df = as_flat_dataframe(de_dup_result, drop_na=False,
+                               keep_cols=config.keep_columns)
 
-    df = as_flat_dataframe(de_dup_result, drop_na=False,
-                           keep_cols=config.keep_columns)
+        for zip_id, group in df.groupby('id'):
+            resampler = ResampleDataFrame(group)
+            fifteen_min_dfs.append(
+                resampler.resample_to(fifteen_minute).dropna(how='all', axis=1))
 
-    for zip_id, group in df.groupby('id'):
-        resampler = ResampleDataFrame(group)
-        fifteen_min_dfs.append(
-            resampler.resample_to(fifteen_minute))
+        # Concatenate and write resampled DataFrame
+        (pd.concat(fifteen_min_dfs).to_parquet(resampled_parquet_file,
+                                               index=False))
 
-    # Concatenate and write resampled DataFrame
-    (pd.concat(fifteen_min_dfs).
-     reset_index(drop=True).
-     to_parquet(INTERIM_DATA_DIR / fifteen_minute.file_name('parquet'),
-                index=False))
+        print(f'Completed writing resampled flat file(s) in '
+              f'{timedelta(seconds=(time.time() - start_time))}')
 
-    print(f'Completed writing resampled flat file(s) in '
-          f'{timedelta(seconds=(time.time() - start_time))}')
-
-    # ----------------Adjust timestamps by offsets to localise times-------------
+    # ----------------Adjust timestamps by offsets to localise times------------
+    cob.read_interim_data(file_name='15min_iob_cob_bg',
+                                  file_type='parquet')
 
     # Get offsets from profiles - limited to individuals with one timezone
     profile_offsets = get_all_offsets_df_from_profiles(config)
@@ -81,10 +84,6 @@ def main():
     profile_offsets.to_csv(INTERIM_DATA_DIR / 'profile_offsets.csv')
 
     # Adjust timestamps in the resampled DataFrames
-    cob = Cob()
-    cob.read_interim_data(file_name='15min_iob_cob_bg',
-                                  file_type='parquet')
-
     args = {'height': 15, 'distance': 5, 'suppress': True}
     df_cob = cob.process_one_tz_individuals(profile_offsets, args)
     logger.info(f'Processed COB data for one timezone individuals: '

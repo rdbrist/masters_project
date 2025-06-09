@@ -186,9 +186,8 @@ class ResampleDataFrame:
             resulting_df.loc[:, count_columns] = \
                 (resulting_df[count_columns].
                  apply(pd.to_numeric, errors='raise').
-                 astype(int).
+                 astype('Int64').
                  fillna(0)
-                 #.astype(int)
                  )
         except Exception as e:
             logger.info(f'Error occurred while converting count columns to int for '
