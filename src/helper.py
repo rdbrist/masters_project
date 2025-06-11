@@ -96,12 +96,12 @@ def separate_flat_file(df: pd.DataFrame) -> List[Tuple[int, pd.DataFrame]]:
     :param df: Dataframe with ['id', 'datetime'] multi level index
     :return: List of tuples (int, pd.DataFrame)
     """
-    df_tuple_by_id = []
+    separated = []
     for group in df.groupby('id'):
-        df_tuple_by_id.append(group)
+        separated.append(group)
 
-    for i, (id_val, df) in enumerate(df_tuple_by_id):
+    for i, (id_val, df) in enumerate(separated):
         df = df.reset_index().drop(columns='id').set_index('datetime')
-        df_tuple_by_id[i] = (id_val, df)
+        separated[i] = (id_val, df)
 
-    return df_tuple_by_id
+    return separated

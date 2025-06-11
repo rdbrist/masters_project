@@ -15,6 +15,7 @@ def mock_dataset():
     data = {
         'id': [1, 1, 2, 2, 3, 3],
         'datetime': pd.date_range(start='2023-01-01', periods=6, freq='15min'),
+        'system': ['A','A','A','A','A','A'],
         'cob max': [10, 20, 30, 40, 50, 60],
     }
     df = pd.DataFrame(data)
@@ -201,17 +202,17 @@ def test_read_interim_data_file_not_found(cob_instance, mock_data_dir):
 def test_read_interim_data_valid_parquet(cob_instance, mock_data_dir):
     # Create a valid Parquet file
     file_path = mock_data_dir / "valid_data.parquet"
-    data = {
-        "id": [1, 1, 1],
-        "datetime": ["2023-01-01 00:00",
-                     "2023-01-01 00:15",
-                     "2023-01-01 00:30"],
-        "system": ["A", "A", "A"]
-    }
-    df = pd.DataFrame(data)
-    df["datetime"] = pd.to_datetime(df["datetime"])
-    df.set_index(["id", "datetime"], inplace=True)  # Set multilevel index
-    df.to_parquet(file_path)
+    # data = {
+    #     "id": [1, 1, 1],
+    #     "datetime": ["2023-01-01 00:00",
+    #                  "2023-01-01 00:15",
+    #                  "2023-01-01 00:30"],
+    #     "system": ["A", "A", "A"]
+    # }
+    # df = pd.DataFrame(data)
+    # df["datetime"] = pd.to_datetime(df["datetime"])
+    # df.set_index(["id", "datetime"], inplace=True)  # Set multilevel index
+    cob_instance.dataset.to_parquet(file_path)
 
     # Ensure the file exists
     assert file_path.exists()

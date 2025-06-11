@@ -10,6 +10,7 @@ from datetime import timedelta
 
 from scipy.signal import find_peaks
 from src.config import INTERIM_DATA_DIR
+from src.candidate_selection import apply_and_filter_by_offsets
 
 
 class Cob:
@@ -74,7 +75,7 @@ class Cob:
             elif file_type == 'parquet':
                 path = self.data_file_path / (file_name + '.parquet')
                 self.dataset = pd.read_parquet(path)
-                self.dataset.reset_index()
+                self.dataset.reset_index(inplace=True)
                 self.dataset['id'] = self.dataset['id'].astype(int)
                 self.dataset['datetime'] = (
                     pd.to_datetime(self.dataset['datetime']))
@@ -672,7 +673,10 @@ class Cob:
                   'processed_dataset.')
             return self.processed_dataset
 
-
+        self.dataset = apply_and_filter_by_offsets(
+            offsets_df=profile_offsets,
+            interim_df=self.dataset
+        )
 
         # We are preparing this for further processing in models, so we need a
         # consistent range of intervals, irrespective of zero day gaps
