@@ -264,7 +264,7 @@ def remove_null_variable_individuals(df: pd.DataFrame) -> pd.DataFrame:
     return df[~df['id'].isin(ids)]
 
 def provide_statistics(
-        separated: list(Tuple[int, pd.DataFrame])) -> pd.DataFrame:
+        separated: list[Tuple[int, pd.DataFrame]]) -> pd.DataFrame:
     """
     Creates statsistics useful in assessing the level of completeness of the
     data saught.
