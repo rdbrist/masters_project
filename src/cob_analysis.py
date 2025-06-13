@@ -11,7 +11,7 @@ from datetime import timedelta
 from scipy.signal import find_peaks
 from src.config import INTERIM_DATA_DIR
 from src.data_processing.read_preprocessed_df import apply_and_filter_by_offsets
-
+from src.helper import check_df_index
 
 class Cob:
     """
@@ -24,17 +24,18 @@ class Cob:
     with regular intervals. The creation of a sparse set for peak extraction and
     plotting is done in the class itself.
     """
-    def __init__(self):
-        self.data_file_path = INTERIM_DATA_DIR
+    def __init__(self, df: pd.DataFrame, sampling_rate: int = 15):
+        # self.data_file_path = INTERIM_DATA_DIR
         self.height = None
         self.distance = None
         self.individual = None
         self.interpolated = None
-        self.dataset = None
+        self.dataset = check_df_index(df)
         self.individual_dataset = None
         self.processed_dataset = None
-        self.sampling_rate = 15  # minutes, default
+        self.sampling_rate = sampling_rate  # minutes, default
         self.offset_processed = False
+        self.summarise_interim_data()
 
     def dataset_is_loaded(self):
         if self.dataset is None:
@@ -539,16 +540,6 @@ class Cob:
         self.interpolated = None
 
         ignored = 0
-
-        if isinstance(self.dataset.index, pd.MultiIndex):
-            for name, level in zip(self.dataset.index.names, self.dataset.index.levels):
-                print(f"Level '{name}': {level.dtype}")
-        else:
-            print(f"Index dtype: {self.dataset.index.dtype}")
-
-        print(self.dataset.index.get_level_values('id').unique())
-
-
         for p_id in ids:
             logger.info(f'Processing ID: {p_id}')
             if p_id not in self.dataset.index.get_level_values('id').unique():

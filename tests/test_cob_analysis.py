@@ -24,8 +24,7 @@ def mock_dataset():
 
 @pytest.fixture
 def cob_instance(mock_dataset):
-    cob = Cob()
-    cob.dataset = mock_dataset
+    cob = Cob(mock_dataset)
     return cob
 
 def test_check_consecutive_intervals(cob_instance):
@@ -260,9 +259,7 @@ def cob_with_data(tmp_path):
     # Save to a temporary parquet file
     data_file = tmp_path / "test.parquet"
     df.to_parquet(data_file)
-    cob = Cob()
-    cob.data_file_path = tmp_path
-    cob.read_interim_data("test", file_type="parquet", sampling_rate=15)
+    cob = Cob(df)
     return cob
 
 def test_process_one_tz_individuals_frequency(cob_with_data):

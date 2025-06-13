@@ -63,6 +63,7 @@ class GeneralisedCols:
 
 @dataclass
 class Resampling:
+    minutes = None
     max_gap_in_min = None
     # how big the gap between two datetime stamps can be
     sample_rule = None
@@ -96,7 +97,8 @@ class Irregular(Resampling):
 
 @dataclass
 class Hourly(Resampling):
-    max_gap_in_min = 60
+    minutes = 60
+    max_gap_in_min = minutes
     # there needs to be a reading at least every hour for the data points to
     # be resampled for that hour
     sample_rule = '1h'
@@ -112,10 +114,11 @@ class Hourly(Resampling):
 
 @dataclass
 class FifteenMinute(Resampling):
-    max_gap_in_min = 15
+    minutes = 15
+    max_gap_in_min = minutes
     # there needs to be a reading at least every 15min for the data points to
     # be resampled for that period
-    sample_rule = '15min'
+    sample_rule = f'{str(minutes)}min'
     needs_max_gap_checking = False
     description = 'FifteenMinute'
 
@@ -129,10 +132,11 @@ class FifteenMinute(Resampling):
 
 @dataclass
 class FiveMinute(Resampling):
-    max_gap_in_min = 5
+    minutes = 5
+    max_gap_in_min = minutes
     # there needs to be a reading at least every 5 min for the data points to
     # be resampled for that period
-    sample_rule = '5min'
+    sample_rule = f'{str(minutes)}min'
     needs_max_gap_checking = False
     description = 'FiveMinute'
 
@@ -146,6 +150,7 @@ class FiveMinute(Resampling):
 
 @dataclass
 class Daily(Resampling):
+    minutes = 24 * 60
     max_gap_in_min = 180
     # a reading every three hours for a daily resampling to be created
     sample_rule = '1D'

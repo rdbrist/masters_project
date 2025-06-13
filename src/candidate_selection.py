@@ -10,7 +10,11 @@ from datetime import time, datetime
 from src.helper import check_df_index
 
 class Nights:
-    def __init__(self, zip_id, df, night_start=time(19, 0), morning_end=time(12, 0), sample_rate = 15):
+    def __init__(self, zip_id: int,
+                 df: pd.DataFrame,
+                 night_start=time(19, 0),
+                 morning_end=time(12, 0),
+                 sample_rate = 15):
         if not isinstance(df.index, pd.DatetimeIndex):
             raise ValueError("DataFrame index must be a DatetimeIndex.")
         self.zip_id = zip_id

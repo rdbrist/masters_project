@@ -1,5 +1,5 @@
 from datetime import timedelta
-
+from pathlib import Path
 import pandas as pd
 from loguru import logger
 
@@ -10,7 +10,10 @@ from src.config import INTERIM_DATA_DIR
 
 
 class ReadPreprocessedDataFrame:
-    def __init__(self, sampling: Resampling, zip_id: str = None, file_type: str = 'csv'):
+    def __init__(self, sampling: Resampling, 
+                 zip_id: str = None, 
+                 file_path: Path = None,  # Includes the file name
+                 file_type: str = 'csv'):
         """
         Class for reading preprocessed csv files into pandas df and configure
         sampling resolution for other classes to use.
@@ -24,26 +27,43 @@ class ReadPreprocessedDataFrame:
         self.__zip_id = zip_id
         self.__config = Configuration()
         self.__file_type = file_type
+        if file_path is None:
+            self.__file_path = flat_preprocessed_file_for(INTERIM_DATA_DIR,
+                                              self.__sampling, self.__file_type)
+        else:
+            self.__file_path = file_path
         self.df = self.__read_df()
 
     def __read_df(self):
-        # if self.__zip_id:
-        #     file = preprocessed_file_for(self.__config.perid_data_folder,
-        #                                  self.__zip_id, self.__sampling)
-        # else:
-        file = flat_preprocessed_file_for(INTERIM_DATA_DIR,
-                                          self.__sampling, self.__file_type)
-        dtypes = {'id': int, 'iob count': int, 'cob count': int,
-                  'bg count': int}
         try:
-            df = pd.read_csv(file,
-                             dtype=dtypes,
-                             parse_dates='datetime')
-            df['datetime'] = (
-                pd.to_datetime(df['datetime'], format='ISO8601'))
-            df.set_index(['id', 'datetime'], inplace=True)
-        except FileNotFoundError as e:
-            raise FileNotFoundError(e)
+            dtypes = {'id': 'int', 'system': 'category',
+                      'iob count': int, 'cob count': int, 'bg count': int}
+            if self.__file_type == 'csv':
+                df = (pd.read_csv(self.__file_path,
+                                   parse_dates=['datetime'],
+                                   dtype=dtypes,
+                                   index_col=['id', 'datetime']))
+                if 'Unnamed: 0' in df.columns:
+                    df.drop(columns=['Unnamed: 0'], inplace=True)
+            elif self.__file_type == 'parquet':
+                df = pd.read_parquet(self.__file_path)
+                df.reset_index(inplace=True)
+                df['id'] = df['id'].astype(int)
+                df['datetime'] = pd.to_datetime(df['datetime'])
+                df = df.set_index(['id', 'datetime'])
+                if not isinstance(df.index, pd.MultiIndex) or \
+                        df.index.names != ['id', 'datetime']:
+                    df = df.set_index(['id', 'datetime'])
+            else:
+                raise ValueError("Invalid file type. "
+                                 "Must be 'csv' or 'parquet'.")
+            df.sort_index(level=['id', 'datetime'], inplace=True)
+        except FileNotFoundError:
+            raise FileNotFoundError(f'File not found in path: {self.__file_path}')
+        except pd.errors.EmptyDataError as e:
+            print(f"No data: {e}")
+        except Exception as e:
+            raise e
 
         return df
 
