@@ -8,11 +8,12 @@ from src.helper import check_df_index
 
 
 class FeatureSet:
-    """
-    Class to process pre-processed dataset into features to be used in training
-    the Hidden Markov Model.
-    """
+
     def __init__(self, dataset=None, input_path=None):
+        """
+        Class to process pre-processed dataset into features to be used in training
+        the models.
+        """
         self.dataset = dataset
         self.scaler = None
         config = Configuration()

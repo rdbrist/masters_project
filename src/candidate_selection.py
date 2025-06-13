@@ -1,9 +1,13 @@
 import pandas as pd
-from datetime import timedelta
+import numpy as np
 from loguru import logger
 from typing import Tuple
 from matplotlib import pyplot as plt
-from datetime import timedelta, time, datetime
+from matplotlib.patches import Patch
+from matplotlib.colors import ListedColormap
+from datetime import time, datetime
+
+from src.helper import check_df_index
 
 class Nights:
     def __init__(self, zip_id, df, night_start=time(19, 0), morning_end=time(12, 0), sample_rate = 15):
@@ -18,18 +22,27 @@ class Nights:
         self.stats_per_night = self._create_stats_per_night()
         self.overall_stats = self._calculate_overall_stats()
 
+    def get_night_period(self, date):
+        """
+        Given a date, night_start (datetime.time), and morning_end (datetime.time),
+        returns the corresponding start and end pd.Timestamp for the nightly period.
+        """
+        date_obj = pd.Timestamp(date).date()
+        night_start_dt = pd.Timestamp.combine(date_obj, self.night_start)
+        if self.morning_end <= self.night_start:
+            morning_end_dt = pd.Timestamp.combine(
+                date_obj + pd.Timedelta(days=1), self.morning_end)
+        else:
+            morning_end_dt = pd.Timestamp.combine(date_obj, self.morning_end)
+        return night_start_dt, morning_end_dt
+
     def _get_total_minutes(self):
         """
         Returns the total number of minutes between night_start and morning_end.
         """
         base_date = datetime(2000, 1, 1)
-        start_dt = datetime.combine(base_date, self.night_start)
-        # Handle overnight periods
-        if self.morning_end <= self.night_start:
-            end_dt = datetime.combine(base_date + timedelta(days=1), self.morning_end)
-        else:
-            end_dt = datetime.combine(base_date, self.morning_end)
-        return int((end_dt - start_dt).total_seconds() // 60)
+        night_start_dt, morning_end_dt = self.get_night_period(base_date)
+        return int((morning_end_dt - night_start_dt).total_seconds() // 60)
 
     def total_minutes(self):
         """
@@ -53,9 +66,7 @@ class Nights:
         nights = []
         dates = pd.to_datetime(self.df.index.date)
         for date in pd.unique(dates):
-            date_obj = pd.Timestamp(date).date()
-            night_start_dt = pd.Timestamp.combine(date_obj, self.night_start)
-            morning_end_dt = pd.Timestamp.combine(date_obj + timedelta(days=1), self.morning_end)
+            night_start_dt, morning_end_dt = self.get_night_period(date)
             mask = (self.df.index >= night_start_dt) & (self.df.index < morning_end_dt)
             night_df = self.df.loc[mask]
             if not night_df.empty:
@@ -79,23 +90,28 @@ class Nights:
         data (determined by missing intervals) to inform the level of completeness.
         :return: dict with average stats across all nights
         """
+        count_of_nights = len(self.nights)
         if not self.stats_per_night:
             return print(f'No stats per night have been calculated for {self.zip_id}. Returning no output.')
-        avg_num_intervals = sum(d['num_intervals'] for d in self.stats_per_night) / len(self.stats_per_night)
-        avg_num_breaks = sum(d['num_breaks'] for d in self.stats_per_night) / len(self.stats_per_night)
-        avg_break_length = sum(d['avg_break_length'] for d in self.stats_per_night) / len(self.stats_per_night)
-        avg_max_break_length = sum(d['max_break_length'] for d in self.stats_per_night) / len(self.stats_per_night)
-        avg_total_break_length = sum(d['total_break_length'] for d in self.stats_per_night) / len(self.stats_per_night)
-        complete_nights =  sum(1 for d in self.stats_per_night if d['num_breaks'] == 0)
+        avg_num_intervals = sum(d['num_intervals'] for d in self.stats_per_night) / count_of_nights
+        avg_num_breaks = sum(d['num_breaks'] for d in self.stats_per_night) / count_of_nights
+        avg_missed_intervals = sum(d['missed_intervals'] for d in self.stats_per_night) / count_of_nights
+        avg_break_length = sum(d['avg_break_length'] for d in self.stats_per_night) / count_of_nights
+        avg_max_break_length = sum(d['max_break_length'] for d in self.stats_per_night) / count_of_nights
+        avg_total_break_length = sum(d['total_break_length'] for d in self.stats_per_night) / count_of_nights
+        complete_nights =  sum(1 for d in self.stats_per_night if d['missed_intervals'] == 0)
+        missed_interval_vectors = [d['missed_interval_vector'] for d in self.stats_per_night]
 
         return {
-            'count_of_nights': len(self.nights),
+            'count_of_nights': count_of_nights,
             'complete_nights': complete_nights,
             'avg_num_intervals': avg_num_intervals,
+            'avg_missed_intervals': avg_missed_intervals,
             'avg_num_breaks': avg_num_breaks,
             'avg_break_length': avg_break_length,
             'avg_max_break_length': avg_max_break_length,
             'avg_total_break_length': avg_total_break_length,
+            'missed_interval_vectors': missed_interval_vectors,
         }
 
     def _create_stats_per_night(self):
@@ -105,6 +121,14 @@ class Nights:
         """
         stats = []
         for night_df in self.nights:
+            date = night_df.index[0].date()
+            night_start_dt, morning_end_dt = self.get_night_period(date)
+            expected_index = pd.date_range(
+                start=night_start_dt,
+                end=morning_end_dt - pd.Timedelta(minutes=self.sample_rate),
+                freq=f'{self.sample_rate}min'
+            )
+            vector = np.where(expected_index.isin(night_df.index), 0, 1)
             times = night_df.index.sort_values()
             # Calculate time differences in minutes between consecutive timestamps
             diffs = times.to_series().diff().dropna().dt.total_seconds() / 60
@@ -117,10 +141,12 @@ class Nights:
             total_break_length = breaks.sum() if num_breaks > 0 else 0
             stats.append({
                 'num_intervals': num_intervals,
+                'missed_intervals': np.sum(vector),
                 'num_breaks': num_breaks,
                 'avg_break_length': avg_break_length,
                 'max_break_length': max_break_length,
-                'total_break_length': total_break_length
+                'total_break_length': total_break_length,
+                'missed_interval_vector': vector.tolist(),
             })
 
         return stats
@@ -209,50 +235,78 @@ class Nights:
 
     def get_nights(self):
         return self.nights
+    
+    def plot_missing_intervals_histogram(self):
+        # Stack vectors: shape (n_nights, n_intervals)
+        vectors_arr = np.vstack(self.overall_stats['missed_interval_vectors'])
+        missing_counts = vectors_arr.sum(axis=0)
+        n_nights = vectors_arr.shape[0]
 
+        # Get time labels for x-axis
+        date = self.nights[0].index[0].date()
+        night_start_dt, morning_end_dt = self.get_night_period(date)
+        expected_index = pd.date_range(
+            start=night_start_dt,
+            end=morning_end_dt - pd.Timedelta(minutes=self.sample_rate),
+            freq=f'{self.sample_rate}min'
+        )
+        time_labels = expected_index.time
 
-def apply_and_filter_by_offsets(
-        offsets_df: pd.DataFrame = None,
-        interim_df: pd.DataFrame = None) -> pd.DataFrame:
-    """
-    Applies the offsets from the offsets_df to the
-    :param offsets_df: Dataframe of offsets with id as index and an integer for
-        the offset to apply to all timestamps for that person.
-    :param interim_df: Dataframe to which the offsets have to be applied.
-    :return: Dataframe with the same shape, with timestamps offset, and limited
-        to only those ids that exist in both.
-    """
-    if offsets_df.index.duplicated().any():
-        raise ValueError("Profile offsets DataFrame contains duplicate IDs."
-                         " Please ensure each ID is unique such that only"
-                         " one offset exists.")
+        plt.figure(figsize=(12, 4))
+        plt.bar(range(len(missing_counts)), missing_counts, color='skyblue')
+        plt.axhline(n_nights, color='red', linestyle='--', label='Total nights')
+        plt.xticks(ticks=range(0, len(time_labels), 4),
+                   labels=[t.strftime('%H:%M') for t in time_labels[::4]],
+                   rotation=45)
+        plt.xlabel('Time Interval')
+        plt.ylabel('Count of Missing Intervals')
+        plt.title('Missing Intervals by Time Across All Nights')
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
 
-    # Check for missing ids before mapping
-    missing_ids = (
-            set(interim_df.index.get_level_values('id')) -
-            set(offsets_df.index))
-    if missing_ids:
-        raise ValueError(f"IDs missing in offsets_df: {missing_ids}")
+    def plot_missingness_heatmap(self, cell_size=0.75, max_width=6,
+                                 max_height=10):
+        arr = np.vstack(self.overall_stats['missed_interval_vectors'])
+        n_nights, n_intervals = arr.shape
 
-    interim_df = interim_df.reset_index()
-    interim_df['offset'] = interim_df['id'].map(offsets_df['offset'])
-    interim_df['datetime'] += interim_df['offset'].apply(timedelta)
-    interim_df['day'] = interim_df['datetime'].dt.date
-    interim_df['time'] = interim_df['datetime'].dt.time
-    return interim_df.set_index(['id', 'datetime']).sort_index()
+        width = min(n_intervals * cell_size, max_width)
+        height = min(n_nights * cell_size, max_height)
+
+        # Define custom colormap: 0 -> white, 1 -> light blue
+        cmap = ListedColormap(['white', '#add8e6'])
+
+        plt.figure(figsize=(width, height))
+        im = plt.imshow(arr, aspect='auto', cmap=cmap, interpolation='none',
+                        vmin=0, vmax=1)
+        plt.xlabel('Time Interval')
+        plt.ylabel('Night')
+        plt.title('Heatmap of Missing Intervals')
+
+        # Custom legend
+        legend_handles = [
+            Patch(facecolor='white', edgecolor='#cccccc', linewidth=1.5, label='Present'),
+            Patch(facecolor='#add8e6', edgecolor='#cccccc', linewidth=1.5, label='Missing')
+        ]
+        plt.legend(handles=legend_handles, loc='upper right', frameon=True)
+
+        plt.tight_layout()
+        plt.show()
+
 
 def remove_null_variable_individuals(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Removes peoples from the dataset that have null or zero values for any
+    Removes people from the dataset that have null or zero values for any
     IOB, COB or BG variable across their dataset.
     :param df: Dataframe to process
     :return: Dataframe with individuals removed
     """
+    df = check_df_index(df)
     check_cols = ['iob count', 'cob count', 'bg count']
     ids_with_only_nans_or_zeros = {}
     for col in check_cols:
         mask = (
-            df.groupby('id')[col]
+            df.groupby(level='id')[col]
             .apply(lambda x: x.isna().all() or (x.fillna(0) == 0).all())
         )
         ids_with_only_nans_or_zeros[col] = mask[mask].index.tolist()
@@ -261,10 +315,10 @@ def remove_null_variable_individuals(df: pd.DataFrame) -> pd.DataFrame:
         ids.update(set(val))
     logger.info(f'Following individuals have one or more variables missing: '
                 f'{ids}')
-    return df[~df['id'].isin(ids)]
+    return df[~df.index.get_level_values('id').isin(ids)]
 
-def provide_statistics(
-        separated: list[Tuple[int, pd.DataFrame]]) -> pd.DataFrame:
+def provide_data_statistics(
+        separated: list[Tuple[int, pd.DataFrame]], sample_rate: int=15) -> pd.DataFrame:
     """
     Creates statsistics useful in assessing the level of completeness of the
     data saught.
@@ -274,7 +328,8 @@ def provide_statistics(
     """
     overall_stats_list = []
     for id_val, df_individual in separated:
-        nights = Nights(zip_id=id_val, df=df_individual, sample_rate=15)
+
+        nights = Nights(zip_id=id_val, df=df_individual, sample_rate=sample_rate)
         stats = nights.overall_stats
         if stats:  # skip if stats is None
             stats['id'] = id_val
@@ -287,5 +342,45 @@ def provide_statistics(
     df_overall_stats.sort_values('complete_nights', ascending=False)
 
     return df_overall_stats
-    
 
+def plot_nights_vs_avg_intervals(df_overall_stats: pd.DataFrame):
+    """
+    Plot the number of nights vs average intervals with markers showing the
+    length of average total length of missing intervals in minutes.
+    :param df_overall_stats: Dataframe of individual (id index) and stat columns
+    """
+    marker_sizes = (df_overall_stats['avg_total_break_length'] + 1) / 4
+
+    max_y = df_overall_stats['period_total_intervals'].max()
+
+    plt.figure(figsize=(8, 5))
+    plt.scatter(
+        df_overall_stats['count_of_nights'],
+        df_overall_stats['avg_num_intervals'],
+        s=marker_sizes,
+        alpha=0.7,
+        c='tab:blue'
+    )
+
+    # Marker size legend
+    for size in [20, 120, 220, 320]:
+        plt.scatter([], [], s=(size + 1) / 2, c='tab:blue', alpha=0.7,
+                    label=size)
+    plt.legend(title='Avg Total Break Length')
+
+    plt.axhline(y=max_y, color='grey', linestyle='dotted', linewidth=1)
+    plt.text(
+        plt.xlim()[1] * 0.98, max_y,
+        'Max possible intervals',
+        color='grey', fontsize=9, ha='right', va='bottom'
+    )
+
+    plt.xlabel('Count of Nights')
+    plt.ylabel('Average Number of Intervals')
+    plt.title('Count of Nights vs Average Number of Intervals\n(Marker size = Average Total Break Length in Minutes)')
+    plt.ylim(top=max_y * 1.05)
+    plt.tight_layout()
+    plt.show()
+
+
+        

@@ -10,7 +10,7 @@ from datetime import timedelta
 
 from scipy.signal import find_peaks
 from src.config import INTERIM_DATA_DIR
-from src.candidate_selection import apply_and_filter_by_offsets
+from src.data_processing.read_preprocessed_df import apply_and_filter_by_offsets
 
 
 class Cob:
@@ -672,7 +672,6 @@ class Cob:
             print('Offset already processed. Returning existing '
                   'processed_dataset.')
             return self.processed_dataset
-
         self.dataset = apply_and_filter_by_offsets(
             offsets_df=profile_offsets,
             interim_df=self.dataset
@@ -682,11 +681,8 @@ class Cob:
         # consistent range of intervals, irrespective of zero day gaps
         zip_ids = profile_offsets.index.unique()
         self.pre_process_batch(ids=zip_ids, remove_zero_days=False, **args)
-
-
         self.offset_processed = True
         return self.processed_dataset
-
 
 def plot_by_hour_individuals(df):
     """
