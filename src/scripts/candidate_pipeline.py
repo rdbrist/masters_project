@@ -2,8 +2,13 @@ from loguru import logger
 
 from src.configurations import Configuration, FifteenMinute
 from src.helper import separate_flat_file, filter_separated_by_ids
-from src.candidate_selection import remove_null_variable_individuals, provide_data_statistics, plot_nights_vs_avg_intervals, Nights
-from src.data_processing.read_preprocessed_df import apply_and_filter_by_offsets, ReadPreprocessedDataFrame
+from src.candidate_selection import (remove_null_variable_individuals,
+                                     provide_data_statistics,
+                                     plot_nights_vs_avg_intervals,
+                                     Nights,
+                                     reconsolidate_flat_file_from_nights)
+from src.data_processing.read_preprocessed_df import (apply_and_filter_by_offsets,
+                                                      ReadPreprocessedDataFrame)
 from src.resample import resample_to_30_minute_intervals
 from src.data_processing.read import read_profile_offsets_csv
 
@@ -52,6 +57,9 @@ def main():
         nights_objects.append(nights.remove_incomplete_nights())
         logger.info(f'Candidate: {id_}, Complete Nights: '
                     f'{nights.overall_stats["complete_nights"]}')
+
+    df_all_selected = reconsolidate_flat_file_from_nights(nights_objects)
+
 
 if __name__ == "__main__":
     main()

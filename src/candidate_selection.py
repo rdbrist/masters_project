@@ -8,6 +8,7 @@ from matplotlib.colors import ListedColormap
 from datetime import time, datetime
 
 from src.helper import check_df_index
+from src.config import FIGURES_DIR
 
 class Nights:
     def __init__(self, zip_id: int,
@@ -148,10 +149,13 @@ class Nights:
     def remove_incomplete_nights(self):
         """
         Removes nights that have missing intervals, i.e. where the number of missed intervals is greater than 0.
+        :return: self with incomplete nights removed
         """
         self.stats_per_night = [s for s in self.stats_per_night if s['missed_intervals'] == 0]
         self.nights = [self.nights[i] for i, s in enumerate(self.stats_per_night) if s['missed_intervals'] == 0]
         self.overall_stats = self._calculate_overall_stats()
+
+        return self
 
     def plot_break_distribution(self):
         """
@@ -319,19 +323,27 @@ def remove_null_variable_individuals(df: pd.DataFrame) -> pd.DataFrame:
                 f'{ids}')
     return df[~df.index.get_level_values('id').isin(ids)]
 
-def provide_data_statistics(
-        separated: list[Tuple[int, pd.DataFrame]], sample_rate: int=15) -> pd.DataFrame:
+def provide_data_statistics(separated: list[Tuple[int, pd.DataFrame]],
+                            sample_rate: int=15,
+                            night_start: time=time(19, 0),
+                            morning_end: time=time(11, 0)) -> pd.DataFrame:
     """
-    Creates statsistics useful in assessing the level of completeness of the
-    data saught.
+    Creates statistics useful in assessing the level of completeness of the
+    data sought.
     :param separated: List of tuples of id and dataframe, where the df is the
         time series data for an individual
+    :param sample_rate: Sample rate in minutes, default is 15
+    :param night_start: Time when the night starts, default is 19:00
+    :param morning_end: Time when the night ends, default is 11:00
     :return: Dataframe with the statistics calculated for individuals
     """
     overall_stats_list = []
     for id_val, df_individual in separated:
-
-        nights = Nights(zip_id=id_val, df=df_individual, sample_rate=sample_rate)
+        nights = Nights(zip_id=id_val,
+                        df=df_individual,
+                        sample_rate=sample_rate,
+                        night_start=night_start,
+                        morning_end=morning_end)
         stats = nights.overall_stats
         if stats:  # skip if stats is None
             stats['id'] = id_val
@@ -382,6 +394,7 @@ def plot_nights_vs_avg_intervals(df_overall_stats: pd.DataFrame):
     plt.title('Count of Nights vs Average Number of Intervals\n(Marker size = Average Total Break Length in Minutes)')
     plt.ylim(top=max_y * 1.05)
     plt.tight_layout()
+    plt.savefig(FIGURES_DIR / 'nights_vs_avg_intervals.png', dpi=400)
     plt.show()
 
 def get_complete_nights_only(all_nights_objects: List[Nights]) -> np.ndarray:
@@ -406,11 +419,12 @@ def reconsolidate_flat_file_from_nights(
     """
     flat_file = pd.DataFrame()
     for nights in nights_objects:
-        for night_df in nights.get_nights():
+        for night_df in nights.nights:
             # Ensure the index is a DatetimeIndex
             if not isinstance(night_df.index, pd.DatetimeIndex):
                 raise ValueError("Night DataFrame index must be a DatetimeIndex.")
-            night_df['id'] = nights.zip_id
-            night_df = night_df.reset_index().set_index(['id', 'datetime'])
-            flat_file = pd.concat([flat_file, night_df])
+            df = night_df.copy()
+            df['id'] = nights.zip_id
+            df = df.reset_index().set_index(['id', 'datetime'])
+            flat_file = pd.concat([flat_file, df])
     return flat_file

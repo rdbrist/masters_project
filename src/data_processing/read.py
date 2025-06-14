@@ -497,6 +497,7 @@ def get_all_offsets_df_from_profiles(config: Configuration) -> pd.DataFrame:
                         .apply(lambda x: convert_timezone_to_utc_offset(x)))
         df['id'] = int(rr.zip_id)
         df_profile_offsets = pd.concat([df_profile_offsets, df])
+        df_profile_offsets.to_csv(config.profile_regions_csv_file)
     df_profile_offsets = (df_profile_offsets.
                           drop(columns=['defaultProfile', 'tz']).
                           drop_duplicates())

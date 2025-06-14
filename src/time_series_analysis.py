@@ -188,4 +188,65 @@ def remove_zero_or_null_days(df: pd.DataFrame, value_col: str) -> pd.DataFrame:
     date_mask = np.array([d in keep_dates for d in df.index.date])
     return df[date_mask]
 
+import matplotlib.pyplot as plt
+import numpy as np
+
+def plot_night_means_for_individual(df: pd.DataFrame,
+                                    zip_id: int,
+                                    variables: list=['iob mean', 'cob mean', 'bg mean'],
+                                    night_start: int=17,
+                                    morning_end: int=11):
+    """
+    Plots mean and variance (as error bands) of variables for a single person over the night period.
+    X-axis shows hour (0-23) in correct overnight order. Assumes df has a MultiIndex ['id', 'datetime'].
+    :param df: DataFrame with MultiIndex ['id', 'datetime'] and columns for variables.
+    :param id_: Person ID to plot.
+    :param variables: List of variable names to plot.
+    :param night_start: Hour when the night period starts (default 19).
+    :param morning_end: Hour when the night period ends (default 12).
+    """
+    def night_period_mask(dt_index):
+        hours = dt_index.hour
+        return (hours >= night_start) | (hours < morning_end)
+
+    def night_hour(hour):
+        if hour >= night_start:
+            return hour - night_start
+        else:
+            return 24 - night_start + hour
+
+    df_person = df.xs(zip_id, level='id')
+    dt_index = df_person.index.get_level_values('datetime')
+    mask = night_period_mask(dt_index)
+    df_night = df_person[mask].copy()
+    hours = dt_index[mask].hour
+    df_night['hour'] = hours
+    df_night['night_hour'] = hours.map(night_hour)
+
+    stats = df_night.groupby(['night_hour', 'hour'])[variables].agg(['mean', 'var']).sort_index()
+    stats = stats.reset_index()
+    for var in variables:
+        min_v = stats[(var, 'mean')].min()
+        max_v = stats[(var, 'mean')].max()
+        stats[(var, 'mean_scaled')] = (stats[(var, 'mean')] - min_v) / (max_v - min_v + 1e-9)
+        stats[(var, 'std_scaled')] = np.sqrt(stats[(var, 'var')]) / (max_v - min_v + 1e-9)
+
+    x = stats['night_hour']
+    x_labels = stats['hour'].astype(str)
+
+    plt.figure(figsize=(10, 4))
+    for var, color in zip(variables, ['tab:blue', 'tab:orange', 'tab:green']):
+        y = stats[(var, 'mean_scaled')]
+        yerr = stats[(var, 'std_scaled')]
+        plt.plot(x, y, label=f'{var} mean', color=color)
+        plt.fill_between(x, y - yerr, y + yerr, color=color, alpha=0.2)
+    plt.title(f'Person {zip_id}')
+    plt.ylabel('Scaled Value')
+    plt.xlabel('Hour')
+    plt.xticks(x, x_labels, rotation=0)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
 

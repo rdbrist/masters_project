@@ -113,6 +113,23 @@ class Hourly(Resampling):
             return 'hourly_iob_cob_bg.parquet'
 
 @dataclass
+class ThirtyMinute(Resampling):
+    minutes = 30
+    max_gap_in_min = minutes
+    # there needs to be a reading at least every 30min for the data points to
+    # be resampled for that period
+    sample_rule = f'{str(minutes)}min'
+    needs_max_gap_checking = False
+    description = 'ThirtyMinute'
+
+    @staticmethod
+    def file_name(filetype: str = 'csv'):
+        if filetype == 'csv':
+            return '30min_iob_cob_bg.csv'
+        elif filetype == 'parquet':
+            return '30min_iob_cob_bg.parquet'
+
+@dataclass
 class FifteenMinute(Resampling):
     minutes = 15
     max_gap_in_min = minutes
@@ -253,6 +270,7 @@ class Configuration:
             INTERIM_DATA_DIR / dedup_flat_device_status_csv_file_name)
     dedup_flat_device_status_parquet_file = (
             INTERIM_DATA_DIR / dedup_flat_device_status_parquet_file_name)
+    profile_regions_csv_file = INTERIM_DATA_DIR / 'profile_regions.csv'
     profile_offsets_csv_file = INTERIM_DATA_DIR / 'profile_offsets.csv'
     feature_set_csv_file = PROCESSED_DATA_DIR / 'feature_set.csv'
     scaler_file = PROCESSED_DATA_DIR / 'scaler.pkl'
