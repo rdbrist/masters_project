@@ -57,7 +57,10 @@ def main():
     filtered_separated = filter_separated_by_ids(separated, candidates)
     nights_objects = []
     for id_, df in filtered_separated:
-        nights = Nights(zip_id=id_, df=df, sample_rate=new_sample_rate)
+        nights = Nights(zip_id=id_, df=df,
+                        night_start=night_start,
+                        morning_end=morning_end,
+                        sample_rate=new_sample_rate)
         nights_objects.append(nights.remove_incomplete_nights())
         logger.info(f'Candidate: {id_}, Complete Nights: '
                     f'{nights.overall_stats["complete_nights"]}')
