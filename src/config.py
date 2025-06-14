@@ -14,10 +14,9 @@ DATA_DIR = PROJ_ROOT / "data"
 # RAW_DATA_DIR = DATA_DIR / "raw"
 # The following needs reverting when publishing
 RAW_DATA_DIR = Path(
-    "C:/Users/ross/OneDrive - University of Bristol/Masters Project/n231 data")
+    "C:/Users/ross/OneDrive - University of Bristol/Masters Project/n183 data")
 INTERIM_DATA_DIR = DATA_DIR / "interim"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
-EXTERNAL_DATA_DIR = DATA_DIR / "external"
 
 MODELS_DIR = PROJ_ROOT / "models"
 

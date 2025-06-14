@@ -1,14 +1,16 @@
+import datetime
 import time
 import pandas as pd
 import os
 from pathlib import Path
-from datetime import timedelta, time
+from datetime import timedelta
 from loguru import logger
 
 from src.candidate_selection import remove_null_variable_individuals, \
     provide_data_statistics, Nights, reconsolidate_flat_file_from_nights, \
     plot_nights_vs_avg_intervals
-from src.configurations import Configuration, Irregular, ThirtyMinute
+from src.configurations import Configuration, Irregular, ThirtyMinute, \
+    FifteenMinute
 from src.data_processing.read import (read_all_device_status,
                                       get_all_offsets_df_from_profiles)
 from src.data_processing.read_preprocessed_df import (
@@ -25,9 +27,9 @@ from src.time_series_analysis import plot_night_means_for_individual
 def main():
     start_time = time.time()
     config = Configuration()
-    sampling = ThirtyMinute()
-    night_start = time(17, 0)  # 5 PM
-    morning_end = time(11, 0) # 11 AM
+    sampling = FifteenMinute()
+    night_start = datetime.time(17, 0)  # 5 PM
+    morning_end = datetime.time(11, 0) # 11 AM
     resampled_parquet_file = (INTERIM_DATA_DIR /
                               sampling.file_name('parquet'))
 
@@ -37,6 +39,8 @@ def main():
 
     if not resampled_parquet_file.exists():
         result = read_all_device_status(config)
+        print(f'Completed reading device status flat files at '
+              f'{timedelta(seconds=(time.time() - start_time))}')
         write_read_record(result,
                           as_flat_file,
                           INTERIM_DATA_DIR,
@@ -87,7 +91,7 @@ def main():
 
     if 'df_resampled' not in locals():
         df_resampled = ReadPreprocessedDataFrame(sampling,
-                                                 file_type='parquet')
+                                                 file_type='parquet').df
 
     profile_offsets = get_all_offsets_df_from_profiles(config)
     profile_offsets = (profile_offsets[
@@ -103,7 +107,7 @@ def main():
     # STAGE 5 : Final candidate selection, analysis and filtering
     # -------------------------------------------------------------------------
     # 1. Remove individuals with null variables
-    df_processed = remove_null_variable_individuals(df)
+    df_processed = remove_null_variable_individuals(df_localised)
 
     # 2. Separate the data into individual dataframes
     separated = separate_flat_file(df_processed)

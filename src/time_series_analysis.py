@@ -191,12 +191,11 @@ def remove_zero_or_null_days(df: pd.DataFrame, value_col: str) -> pd.DataFrame:
 def _plot_means_for_individual(
     df, zip_id, variables, groupby_cols, x_col, x_label, title
 ):
-    df_person = df.xs(zip_id, level='id').copy()
-    if 'hour' not in df_person:
-        dt_index = df_person.index.get_level_values('datetime')
-        df_person['hour'] = dt_index.hour
+    if 'hour' not in df:
+        dt_index = df.index.get_level_values('datetime')
+        df['hour'] = dt_index.hour
 
-    stats = df_person.groupby(groupby_cols)[variables].agg(['mean', 'var']).reset_index()
+    stats = df.groupby(groupby_cols)[variables].agg(['mean', 'var']).reset_index()
     for var in variables:
         mean = stats[(var, 'mean')]
         stats[(var, 'mean_scaled')] = (mean - mean.min()) / (mean.ptp() + 1e-9)
