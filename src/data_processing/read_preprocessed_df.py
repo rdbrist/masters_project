@@ -45,15 +45,16 @@ class ReadPreprocessedDataFrame:
                                    index_col=['id', 'datetime']))
                 if 'Unnamed: 0' in df.columns:
                     df.drop(columns=['Unnamed: 0'], inplace=True)
+                df = check_df_index(df)
             elif self.__file_type == 'parquet':
                 df = pd.read_parquet(self.__file_path)
-                df.reset_index(inplace=True)
-                df['id'] = df['id'].astype(int)
-                df['datetime'] = pd.to_datetime(df['datetime'])
-                df = df.set_index(['id', 'datetime'])
-                if not isinstance(df.index, pd.MultiIndex) or \
-                        df.index.names != ['id', 'datetime']:
-                    df = df.set_index(['id', 'datetime'])
+                df = check_df_index(df)
+                # df['id'] = df['id'].astype(int)
+                # df['datetime'] = pd.to_datetime(df['datetime'])
+                # df = df.set_index(['id', 'datetime'])
+                # if not isinstance(df.index, pd.MultiIndex) or \
+                #         df.index.names != ['id', 'datetime']:
+                #     df = df.set_index(['id', 'datetime'])
             else:
                 raise ValueError("Invalid file type. "
                                  "Must be 'csv' or 'parquet'.")
@@ -65,6 +66,8 @@ class ReadPreprocessedDataFrame:
         except Exception as e:
             raise e
 
+        if 'system' in df.columns:
+            df.drop(columns=['system'], inplace=True)
         return df
 
 

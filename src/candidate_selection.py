@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from loguru import logger
-from typing import Tuple
+from typing import Tuple, List
 from matplotlib import pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib.colors import ListedColormap
@@ -78,16 +78,6 @@ class Nights:
 
         return nights
 
-    def remove_incomplete_nights(self):
-        """
-        Removes any nights that do not have a timestamp at each 15 minute interval.
-        """
-        complete_nights = []
-        for night_df in self.nights:
-            if night_df.index.nunique() == self.total_intervals:
-                complete_nights.append(night_df)
-        self.nights = complete_nights
-
     def _calculate_overall_stats(self):
         """
         Calculates stats for the overall dataset to determine the number of gaps in
@@ -154,6 +144,14 @@ class Nights:
             })
 
         return stats
+
+    def remove_incomplete_nights(self):
+        """
+        Removes nights that have missing intervals, i.e. where the number of missed intervals is greater than 0.
+        """
+        self.stats_per_night = [s for s in self.stats_per_night if s['missed_intervals'] == 0]
+        self.nights = [self.nights[i] for i, s in enumerate(self.stats_per_night) if s['missed_intervals'] == 0]
+        self.overall_stats = self._calculate_overall_stats()
 
     def plot_break_distribution(self):
         """
@@ -386,5 +384,33 @@ def plot_nights_vs_avg_intervals(df_overall_stats: pd.DataFrame):
     plt.tight_layout()
     plt.show()
 
+def get_complete_nights_only(all_nights_objects: List[Nights]) -> np.ndarray:
+    """
+    Returns a list of only the nights that are complete, i.e. have no missing intervals.
+    :param nights_array: List of Nights objects
+    :return: List of objects with shape (id, [night_df, ...])
+    """
+    processed_individuals = []
+    for nights in all_nights_objects:
+        complete_nights_indices = nights.stats_per_night[nights.stats_per_night['missed_intervals'] == 0].index
+        print(complete_nights_indices)
+    return processed_individuals
 
-        
+def reconsolidate_flat_file_from_nights(
+        nights_objects: List[Nights]) -> pd.DataFrame:
+    """
+    Reconstructs a flat file from the list of Nights objects in the common
+    format, with a multi-index of id and datetime.
+    :param nights_objects: List of Nights objects
+    :return: DataFrame with the reconstructed flat file
+    """
+    flat_file = pd.DataFrame()
+    for nights in nights_objects:
+        for night_df in nights.get_nights():
+            # Ensure the index is a DatetimeIndex
+            if not isinstance(night_df.index, pd.DatetimeIndex):
+                raise ValueError("Night DataFrame index must be a DatetimeIndex.")
+            night_df['id'] = nights.zip_id
+            night_df = night_df.reset_index().set_index(['id', 'datetime'])
+            flat_file = pd.concat([flat_file, night_df])
+    return flat_file

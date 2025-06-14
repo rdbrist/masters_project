@@ -4,7 +4,7 @@
 import dataclasses
 import glob
 import pandas as pd
-from typing import Tuple, List
+from typing import Tuple, List, Union
 from pathlib import Path
 
 from src.configurations import Configuration, Resampling
@@ -105,3 +105,31 @@ def separate_flat_file(df: pd.DataFrame) -> List[Tuple[int, pd.DataFrame]]:
         separated[i] = (id_val, df)
 
     return separated
+
+def get_dfs_from_separated(separated, zip_ids: Union[int, list]) -> Union[pd.DataFrame, List[pd.DataFrame]]:
+    """
+    Get the dataframe(s) for the specified id(s) from the separated list.
+    :param separated: List of tuples with id and df
+    :param zip_ids: Int of single zip is or list of zip ids
+    :return: DataFrame for the specified id or list of DataFrames for all ids in the list.
+    """
+    if isinstance(zip_ids, int):
+        for id_, df in separated:
+            if id_ == zip_ids:
+                return df
+    elif isinstance(zip_ids, list):
+        result = []
+        for id_, df in separated:
+            if id_ in zip_ids:
+                result.append(df)
+        return result
+    return None
+
+def filter_separated_by_ids(separated: List[Tuple[int, pd.DataFrame]], ids: List[int]) -> List[Tuple[int, pd.DataFrame]]:
+    """
+    Filters the separated list by the specified ids.
+    :param separated: List of tuples with id and df
+    :param ids: List of ids to filter by
+    :return: Filtered list of tuples with id and df
+    """
+    return [(id_, df) for id_, df in separated if id_ in ids]
