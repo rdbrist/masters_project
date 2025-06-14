@@ -1,3 +1,4 @@
+from datetime import time
 from loguru import logger
 
 from src.configurations import Configuration, FifteenMinute
@@ -11,14 +12,17 @@ from src.data_processing.read_preprocessed_df import (apply_and_filter_by_offset
                                                       ReadPreprocessedDataFrame)
 from src.resample import resample_to_30_minute_intervals
 from src.data_processing.read import read_profile_offsets_csv
+from src.time_series_analysis import plot_night_means_for_individual
 
 
 def main():
     # 0. Import the preprocessed data
-    fifteen_minute = FifteenMinute()
+    sampling = FifteenMinute()
     config = Configuration()
+    night_start = time(17, 0)  # 5 PM
+    morning_end = time(11, 0)  # 11 AM
     new_sample_rate = 30  # Resampling to 30-minute intervals
-    df = ReadPreprocessedDataFrame(fifteen_minute, file_type='parquet').df
+    df = ReadPreprocessedDataFrame(sampling, file_type='parquet').df
     df_offsets = read_profile_offsets_csv(config)
 
     # 1. Resample to 30-minute intervals
@@ -59,6 +63,11 @@ def main():
                     f'{nights.overall_stats["complete_nights"]}')
 
     df_all_selected = reconsolidate_flat_file_from_nights(nights_objects)
+    
+    for zip_id in candidates:
+        plot_night_means_for_individual(df_all_selected, zip_id,
+                                        night_start=night_start.hour,
+                                        morning_end=morning_end.hour)
 
 
 if __name__ == "__main__":

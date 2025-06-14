@@ -85,7 +85,7 @@ def main():
     # STAGE 4 : Adjust timestamps by offsets to localise times
     # -------------------------------------------------------------------------
 
-    if df_resampled not in locals():
+    if 'df_resampled' not in locals():
         df_resampled = ReadPreprocessedDataFrame(sampling,
                                                  file_type='parquet')
 
