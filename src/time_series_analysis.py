@@ -189,7 +189,7 @@ def remove_zero_or_null_days(df: pd.DataFrame, value_col: str) -> pd.DataFrame:
     return df[date_mask]
 
 def _plot_means_for_individual(
-    df, zip_id, variables, groupby_cols, x_col, x_label, title
+    df, variables, groupby_cols, x_col, x_label, title
 ):
     if 'hour' not in df:
         dt_index = df.index.get_level_values('datetime')
@@ -222,48 +222,48 @@ def plot_night_means_for_individual(
 ):
     """
     Plot the means of specified variables for an individual during night hours.
-    :param df:
-    :param zip_id:
-    :param variables:
-    :param night_start:
-    :param morning_end:
-    :return:
+     :param df: DataFrame containing time series data with a multi-index
+        including 'id' and 'datetime'.
+    :param zip_id: int, identifier for the individual.
+    :param variables: list of str, names of the variables to plot. If None, ['iob mean', 'cob mean', 'bg mean'] are used
+    :param night_start: int, hour when the night starts (0-23).
+    :param morning_end: int, hour when the morning ends (0-23).
     """
     if variables is None:
         variables = ['iob mean', 'cob mean', 'bg mean']
 
     def night_hour(hour):
         return hour - night_start if hour >= night_start else 24 - night_start + hour
-
-    df_person = df.xs(zip_id, level='id').copy()
-    dt_index = df_person.index.get_level_values('datetime')
-    df_person['hour'] = dt_index.hour
-    df_person['night_hour'] = df_person['hour'].map(night_hour)
-    df_night = df_person[(df_person['hour'] >= night_start) | (df_person['hour'] < morning_end)]
+    df_new = df.copy()
+    dt_index = df_new.index.get_level_values('datetime')
+    df_new['hour'] = dt_index.hour
+    df_new['night_hour'] = df_new['hour'].map(night_hour)
+    df_night = df_new[(df_new['hour'] >= night_start) | (df_new['hour'] < morning_end)]
     _plot_means_for_individual(
-        df_night, zip_id, variables,
+        df_night, variables,
         groupby_cols=['night_hour', 'hour'],
         x_col='night_hour',
         x_label='Hour',
-        title=f'Person {zip_id}'
+        title=f'Person {str(zip_id)}'
     )
 
 def plot_hourly_means_for_individual(df, zip_id, variables=None):
     """
     Plot the hourly means of specified variables for an individual.
-    :param df:
-    :param zip_id:
-    :param variables:
-    :return:
+    :param df: DataFrame containing time series data with a multi-index
+        including 'id' and 'datetime'.
+    :param zip_id: int, identifier for the individual.
+    :param variables: list of str, names of the variables to plot. If None, ['iob mean', 'cob mean', 'bg mean'] are used
     """
     if variables is None:
         variables = ['iob mean', 'cob mean', 'bg mean']
+    df_new = df.copy()
     _plot_means_for_individual(
-        df, zip_id, variables,
+        df_new, variables,
         groupby_cols=['hour'],
         x_col='hour',
         x_label='Hour',
-        title=f'Person {zip_id} (hourly means across all days)'
+        title=f'Person {str(zip_id)} (hourly means across all days)'
     )
 
 

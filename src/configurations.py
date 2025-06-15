@@ -272,7 +272,7 @@ class Configuration:
             INTERIM_DATA_DIR / dedup_flat_device_status_parquet_file_name)
     profile_regions_csv_file = INTERIM_DATA_DIR / 'profile_regions.csv'
     profile_offsets_csv_file = INTERIM_DATA_DIR / 'profile_offsets.csv'
-    final_filtered_csv = 'final_filtered_set.csv'
+    final_filtered_csv = PROCESSED_DATA_DIR / 'final_filtered_set.csv'
     feature_set_csv_file = PROCESSED_DATA_DIR / 'feature_set.csv'
     scaler_file = PROCESSED_DATA_DIR / 'scaler.pkl'
 
