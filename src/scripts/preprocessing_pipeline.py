@@ -27,7 +27,7 @@ from src.time_series_analysis import plot_night_means_for_individual
 def main():
     start_time = time.time()
     config = Configuration()
-    sampling = FifteenMinute()
+    sampling = ThirtyMinute()
     night_start = datetime.time(17, 0)  # 5 PM
     morning_end = datetime.time(11, 0) # 11 AM
     resampled_parquet_file = (INTERIM_DATA_DIR /
@@ -138,6 +138,8 @@ def main():
                     f'{nights.overall_stats["complete_nights"]}')
 
     df_all_selected = reconsolidate_flat_file_from_nights(nights_objects)
+    final_csv = INTERIM_DATA_DIR / config.final_filtered_csv
+    df_all_selected.to_csv(final_csv)
 
     for zip_id in candidates:
         plot_night_means_for_individual(df_all_selected, zip_id,

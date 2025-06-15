@@ -175,7 +175,7 @@ class Daily(Resampling):
     description = 'Daily'
 
     @staticmethod
-    def file_name(filetype: str = 'csv'):
+    def file_name(stage: str = '', filetype: str = 'csv'):
         if filetype == 'csv':
             return 'daily_iob_cob_bg.csv'
         elif filetype == 'parquet':
@@ -191,7 +191,7 @@ class Configuration:
     treat_timezone = config['treat_timezone']
     limit_to_2023_subset = config['limit_to_2023_subset']
     if limit_to_2023_subset:
-        subset_ids = pd.read_csv(INTERIM_DATA_DIR / "15min_iob_cob_bg_old_sample.csv",
+        subset_ids = pd.read_csv(INTERIM_DATA_DIR / "15min_iob_cob_bg_insulin_need.csv",
                          usecols=['id'])
         zip_ids_2023_subset = subset_ids['id'].unique().tolist()
     perid_data_folder = INTERIM_DATA_DIR / 'perid'
@@ -272,6 +272,7 @@ class Configuration:
             INTERIM_DATA_DIR / dedup_flat_device_status_parquet_file_name)
     profile_regions_csv_file = INTERIM_DATA_DIR / 'profile_regions.csv'
     profile_offsets_csv_file = INTERIM_DATA_DIR / 'profile_offsets.csv'
+    final_filtered_csv = 'final_filtered_set.csv'
     feature_set_csv_file = PROCESSED_DATA_DIR / 'feature_set.csv'
     scaler_file = PROCESSED_DATA_DIR / 'scaler.pkl'
 

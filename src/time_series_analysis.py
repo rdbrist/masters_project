@@ -198,8 +198,8 @@ def _plot_means_for_individual(
     stats = df.groupby(groupby_cols)[variables].agg(['mean', 'var']).reset_index()
     for var in variables:
         mean = stats[(var, 'mean')]
-        stats[(var, 'mean_scaled')] = (mean - mean.min()) / (mean.ptp() + 1e-9)
-        stats[(var, 'std_scaled')] = np.sqrt(stats[(var, 'var')]) / (mean.ptp() + 1e-9)
+        stats[(var, 'mean_scaled')] = (mean - mean.min()) / (mean.max() - mean.min() + 1e-9)
+        stats[(var, 'std_scaled')] = np.sqrt(stats[(var, 'var')]) / (mean.max() - mean.min() + 1e-9)
 
     x = stats[x_col]
     x_labels = stats['hour'].astype(str)

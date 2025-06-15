@@ -4,6 +4,7 @@
 import dataclasses
 import glob
 import pandas as pd
+import numpy as np
 from typing import Tuple, List, Union
 from pathlib import Path
 
@@ -113,7 +114,7 @@ def get_dfs_from_separated(separated, zip_ids: Union[int, list]) -> Union[pd.Dat
     :param zip_ids: Int of single zip is or list of zip ids
     :return: DataFrame for the specified id or list of DataFrames for all ids in the list.
     """
-    if isinstance(zip_ids, int):
+    if isinstance(zip_ids, (int, np.integer)):
         for id_, df in separated:
             if id_ == zip_ids:
                 return df
