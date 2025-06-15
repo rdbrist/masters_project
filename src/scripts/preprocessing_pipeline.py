@@ -98,6 +98,8 @@ def main():
                            ~profile_offsets['id'].duplicated(keep=False) &
                            profile_offsets['offset'].notnull()].
                        set_index('id'))
+    logger.info(f'Number of people with single timezones from profiles: '
+                f'n={len(profile_offsets)}')
     profile_offsets.to_csv(INTERIM_DATA_DIR / 'profile_offsets.csv')
 
     df_localised = apply_and_filter_by_offsets(profile_offsets, df_resampled)

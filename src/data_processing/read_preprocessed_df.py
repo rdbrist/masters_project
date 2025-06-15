@@ -75,7 +75,9 @@ def apply_and_filter_by_offsets(
         offsets_df: pd.DataFrame = None,
         interim_df: pd.DataFrame = None) -> pd.DataFrame:
     """
-    Applies the offsets from the offsets_df to the
+    Applies the offsets from the offsets_df to the datetime column in the
+    interim_df, such that they are adjusted. The offsets_df is assumed to
+    be limited to single-timezone people only, i.e. all ids will be unique.
     :param offsets_df: Dataframe of offsets with id as index and an integer for
         the offset to apply to all timestamps for that person.
     :param interim_df: Dataframe to which the offsets have to be applied.
@@ -86,6 +88,8 @@ def apply_and_filter_by_offsets(
         raise ValueError("Profile offsets DataFrame contains duplicate IDs."
                          " Please ensure each ID is unique such that only"
                          " one offset exists.")
+    if offsets_df.index.name != 'id':
+        raise ValueError("Profile offsets DataFrame must have 'id' index.")
 
     interim_df = check_df_index(interim_df)
 
@@ -98,7 +102,7 @@ def apply_and_filter_by_offsets(
     interim_df = interim_df[~interim_df.index.get_level_values('id').isin(missing_ids)]
     interim_df = interim_df.reset_index()
     interim_df['offset'] = interim_df['id'].map(offsets_df['offset'])
-    interim_df['datetime'] += interim_df['offset'].apply(timedelta)
+    interim_df['datetime'] += interim_df['offset'].apply(lambda h: timedelta(hours=h))
     interim_df['day'] = interim_df['datetime'].dt.date
     interim_df['time'] = interim_df['datetime'].dt.time
     return interim_df.set_index(['id', 'datetime']).sort_index()
