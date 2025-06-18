@@ -72,6 +72,7 @@ def check_df_index(df: pd.DataFrame = None) -> pd.DataFrame:
     if not isinstance(df.index, pd.MultiIndex):
         try:
             df['id'] = df['id'].astype(int)
+            df['datetime'] = pd.to_datetime(df['datetime'])
             df.set_index(['id', 'datetime'], inplace=True)
         except:
             raise ValueError("DataFrame index must be a MultiIndex")

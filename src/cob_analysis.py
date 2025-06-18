@@ -52,55 +52,55 @@ class Cob:
         self.height = height
         self.distance = distance
 
-    def read_interim_data(self,
-                          file_name: str,
-                          file_type: str = 'csv',
-                          sampling_rate: int = 15):
-        """
-        Read raw data from CSV file and save as parquet file. File is indexed
-        by ID and datetime.
-        :param file_name: filename, without extension
-        :param file_type: file type, default is 'csv', can be 'parquet'
-        :param sampling_rate: sampling rate in minutes, default is 15
-        """
-        try:
-            dtypes = {'id': 'int', 'system': 'category'}
-            if file_type == 'csv':
-                path = self.data_file_path / (file_name + '.csv')
-                self.dataset = (pd.read_csv(path,
-                                            parse_dates=['datetime'],
-                                            dtype=dtypes,
-                                            index_col=['id', 'datetime']))
-                if 'Unnamed: 0' in self.dataset.columns:
-                    self.dataset.drop(columns=['Unnamed: 0'], inplace=True)
-            elif file_type == 'parquet':
-                path = self.data_file_path / (file_name + '.parquet')
-                self.dataset = pd.read_parquet(path)
-                self.dataset.reset_index(inplace=True)
-                self.dataset['id'] = self.dataset['id'].astype(int)
-                self.dataset['datetime'] = (
-                    pd.to_datetime(self.dataset['datetime']))
-                self.dataset = self.dataset.set_index(['id', 'datetime'])
-                if not isinstance(self.dataset.index, pd.MultiIndex) or \
-                        self.dataset.index.names != ['id', 'datetime']:
-                    self.dataset = self.dataset.set_index(['id', 'datetime'])
-            else:
-                raise ValueError("Invalid file type. "
-                                 "Must be 'csv' or 'parquet'.")
-            self.dataset.sort_index(level=['id', 'datetime'], inplace=True)
-            self.summarise_interim_data()
-            self.sampling_rate = sampling_rate
-            if not self._validate_sampling_rate():
-                print(f"Sampling rate {self.sampling_rate} does not match the "
-                      f"data.\nThis needs addressing to make the intervals "
-                      f"consistent.")
-                raise ValueError
-        except FileNotFoundError:
-            raise FileNotFoundError(f'File not found in path: {path}')
-        except pd.errors.EmptyDataError as e:
-            print(f"No data: {e}")
-        except Exception as e:
-            raise e
+    # def read_interim_data(self,
+    #                       file_name: str,
+    #                       file_type: str = 'csv',
+    #                       sampling_rate: int = 15):
+    #     """
+    #     Read raw data from CSV file and save as parquet file. File is indexed
+    #     by ID and datetime.
+    #     :param file_name: filename, without extension
+    #     :param file_type: file type, default is 'csv', can be 'parquet'
+    #     :param sampling_rate: sampling rate in minutes, default is 15
+    #     """
+    #     try:
+    #         dtypes = {'id': 'int', 'system': 'category'}
+    #         if file_type == 'csv':
+    #             path = self.data_file_path / (file_name + '.csv')
+    #             self.dataset = (pd.read_csv(path,
+    #                                         parse_dates=['datetime'],
+    #                                         dtype=dtypes,
+    #                                         index_col=['id', 'datetime']))
+    #             if 'Unnamed: 0' in self.dataset.columns:
+    #                 self.dataset.drop(columns=['Unnamed: 0'], inplace=True)
+    #         elif file_type == 'parquet':
+    #             path = self.data_file_path / (file_name + '.parquet')
+    #             self.dataset = pd.read_parquet(path)
+    #             self.dataset.reset_index(inplace=True)
+    #             self.dataset['id'] = self.dataset['id'].astype(int)
+    #             self.dataset['datetime'] = (
+    #                 pd.to_datetime(self.dataset['datetime']))
+    #             self.dataset = self.dataset.set_index(['id', 'datetime'])
+    #             if not isinstance(self.dataset.index, pd.MultiIndex) or \
+    #                     self.dataset.index.names != ['id', 'datetime']:
+    #                 self.dataset = self.dataset.set_index(['id', 'datetime'])
+    #         else:
+    #             raise ValueError("Invalid file type. "
+    #                              "Must be 'csv' or 'parquet'.")
+    #         self.dataset.sort_index(level=['id', 'datetime'], inplace=True)
+    #         self.summarise_interim_data()
+    #         self.sampling_rate = sampling_rate
+    #         if not self._validate_sampling_rate():
+    #             print(f"Sampling rate {self.sampling_rate} does not match the "
+    #                   f"data.\nThis needs addressing to make the intervals "
+    #                   f"consistent.")
+    #             raise ValueError
+    #     except FileNotFoundError:
+    #         raise FileNotFoundError(f'File not found in path: {path}')
+    #     except pd.errors.EmptyDataError as e:
+    #         print(f"No data: {e}")
+    #     except Exception as e:
+    #         raise e
 
     def read_processed_data(self, file_name: Path,
                             sampling_rate: int = 15,

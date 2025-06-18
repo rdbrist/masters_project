@@ -206,6 +206,7 @@ class NightAnalyser:
     def cluster_nights(self, n_clusters, print_clusters=True, plot_2d=True):
         """
         Clusters the nights using K-Means.
+        :param print_clusters: bool, Whether to print cluster distribution.
         :param n_clusters: (int), Number of clusters for K-Means.
         :param plot_2d: (bool), Whether to plot 2D PCA for clusters.
         """
@@ -268,21 +269,20 @@ class NightAnalyser:
         temp_df[['id', 'date']] = temp_df['index'].str.split('_', expand=True)
         temp_df['date'] = pd.to_datetime(temp_df['date'])
         temp_df['id'] = temp_df['id'].astype(int)
-        temp_df.drop('index', axis=1).set_index(['id', 'date'])
+        temp_df.drop('index', axis=1).set_index(['id', 'date'], inplace=True)
 
         return temp_df
 
-    def silhouette_analysis(analyser, cluster_range: range) -> list:
+    def silhouette_analysis(self, cluster_range: range) -> list:
         """
         Perform silhouette analysis for a range of cluster numbers.
-        :param analyser: NightAnalyser instance with preprocessed features.
         :param cluster_range: Range of cluster numbers to evaluate.
         :return: List of silhouette scores for each cluster number.
         """
         silhouette_scores = []
         for n_clusters in cluster_range:
-            analyser.cluster_nights(n_clusters=n_clusters, print_clusters=False, plot_2d=False)
-            silhouette_scores.append(analyser.silhouette_score)
+            self.cluster_nights(n_clusters=n_clusters, print_clusters=False, plot_2d=False)
+            silhouette_scores.append(self.silhouette_score)
 
         plt.plot(cluster_range, silhouette_scores)
         plt.title('Silhouette Analysis')
