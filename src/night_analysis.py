@@ -12,6 +12,7 @@ from tsfresh.feature_extraction import ComprehensiveFCParameters, \
 from tsfresh.utilities.dataframe_functions import impute
 
 from src.helper import check_df_index
+from src.config import FIGURES_DIR
 
 
 class NightAnalyser:
@@ -283,6 +284,7 @@ class NightAnalyser:
             plt.title('Nights Clustered (KMeans)')
             plt.xlabel('Principal Component 1')
             plt.ylabel('Principal Component 2')
+            plt.savefig(FIGURES_DIR / 'clustered_nights_pca.png', dpi=400, bbox_inches='tight')
             plt.show()
         elif plot_2d and (self.night_pca_components is None or self.night_pca_components.shape[1] < 2):
             print("Cannot plot 2D PCA: PCA not performed or less than 2 components.")
