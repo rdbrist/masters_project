@@ -28,6 +28,7 @@ class NightAnalyser:
         print(self.variable_cols)
         self.customised_feature_dict = None
         self.feature_settings = self._get_feature_settings(feature_settings)
+        self.night_start_hour = 17  # Default night start hour
         self.night_features_df = None
         self.scaled_night_features = None
         self.night_pca_components = None
@@ -229,15 +230,57 @@ class NightAnalyser:
         self.silhouette_score = silhouette_score(data_for_clustering, self.night_clusters)
 
         if plot_2d and self.night_pca_components is not None and self.night_pca_components.shape[1] >= 2:
+            id_list = pd.Categorical(self.reindex_night_features()['id']).codes.astype(int) + 1000
+
+            # Build DataFrame for plotting
+            plot_df = pd.DataFrame({
+                'PC1': self.night_pca_components[:, 0],
+                'PC2': self.night_pca_components[:, 1],
+                'cluster_label': self.night_clusters,
+                'id': id_list
+            })
+
             plt.figure(figsize=(8, 6))
-            sns.scatterplot(
-                x=self.night_pca_components[:, 0],
-                y=self.night_pca_components[:, 1],
-                hue=self.night_clusters,
+            ax = sns.scatterplot(
+                data=plot_df,
+                x='PC1',
+                y='PC2',
+                hue='cluster_label',
+                style='id',
                 palette='viridis',
                 alpha=0.7
             )
-            plt.title(f'Nights Clustered (KMeans, K={n_clusters})')
+
+            # Remove the default legend
+            ax.legend_.remove()
+
+            # Cluster legend
+            handles1, labels1 = ax.get_legend_handles_labels()
+            unique_clusters = plot_df['cluster_label'].unique()
+            cluster_handles = []
+            cluster_labels = []
+            for c in sorted(unique_clusters):
+                idx = labels1.index(str(c)) if str(
+                    c) in labels1 else labels1.index(int(c))
+                cluster_handles.append(handles1[idx])
+                cluster_labels.append(f'Cluster {c}')
+            legend1 = ax.legend(cluster_handles, cluster_labels,
+                                title='Cluster', loc='upper right')
+            ax.add_artist(legend1)
+
+            # ID legend
+            unique_ids = plot_df['id'].unique()
+            id_handles = []
+            id_labels = []
+            for i in unique_ids:
+                idx = labels1.index(str(i)) if str(
+                    i) in labels1 else labels1.index(int(i))
+                id_handles.append(handles1[idx])
+                id_labels.append(f'ID {i}')
+            legend2 = ax.legend(id_handles, id_labels, title='ID',
+                                loc='lower right')
+
+            plt.title('Nights Clustered (KMeans)')
             plt.xlabel('Principal Component 1')
             plt.ylabel('Principal Component 2')
             plt.show()
@@ -258,20 +301,9 @@ class NightAnalyser:
             index=self.scaled_night_features.index
         )
         original_features_df['cluster_label'] = self.night_clusters
+
         return original_features_df.groupby('cluster_label').mean()
 
-    def reindex_night_features(self):
-        """Reindexes the night features DataFrame to ensure it has a MultiIndex with 'id' and 'date'."""
-        if self.night_features_df is None:
-            raise ValueError("Night features not extracted yet. Run extract_night_level_features first.")
-
-        temp_df = self.night_features_df.reset_index().copy()
-        temp_df[['id', 'date']] = temp_df['index'].str.split('_', expand=True)
-        temp_df['date'] = pd.to_datetime(temp_df['date'])
-        temp_df['id'] = temp_df['id'].astype(int)
-        temp_df.drop('index', axis=1).set_index(['id', 'date'], inplace=True)
-
-        return temp_df
 
     def silhouette_analysis(self, cluster_range: range) -> list:
         """
@@ -281,7 +313,9 @@ class NightAnalyser:
         """
         silhouette_scores = []
         for n_clusters in cluster_range:
-            self.cluster_nights(n_clusters=n_clusters, print_clusters=False, plot_2d=False)
+            self.cluster_nights(n_clusters=n_clusters,
+                                print_clusters=False,
+                                plot_2d=False)
             silhouette_scores.append(self.silhouette_score)
 
         plt.plot(cluster_range, silhouette_scores)
@@ -292,3 +326,51 @@ class NightAnalyser:
         plt.show()
 
         return silhouette_scores
+
+    def reindex_night_features(self):
+        """
+        Reindexes the night features DataFrame to ensure it has a MultiIndex
+        with 'id' and 'date'.
+        :return: DataFrame with MultiIndex ['id', 'date'].
+        """
+        if self.night_features_df is None:
+            raise ValueError("Night features not extracted yet. "
+                             "Run extract_night_level_features first.")
+
+        temp_df = self.night_features_df.reset_index().copy()
+        temp_df[['id', 'date']] = temp_df['index'].str.split('_', expand=True)
+        temp_df['date'] = pd.to_datetime(temp_df['date'])
+        temp_df['id'] = temp_df['id'].astype(int)
+        temp_df.drop('index', axis=1).set_index(['id', 'date'], inplace=True)
+
+        return temp_df
+
+    def return_original_dataset_with_clusters(self):
+        """
+        Returns the original dataset with the cluster labels added.
+        :return: DataFrame with original features and cluster labels, plus
+            'night_start_date' indicating the start of the night period.
+        """
+        if self.night_features_df is None:
+            raise ValueError("Night features not extracted yet. Run "
+                             "extract_night_level_features first.")
+
+        temp = self.reindex_night_features()
+        temp = (temp[['id', 'date', 'cluster_label']].
+                rename(columns={'date': 'night_start_date'}).
+                set_index(['id', 'night_start_date'])
+                )
+
+        df_clustered = self.df.reset_index().copy()
+        hour = df_clustered['datetime'].dt.hour
+        df_clustered['night_start_date'] = (
+                    df_clustered['datetime'] - pd.to_timedelta(
+                (hour < self.night_start_hour).astype(int), unit='D')).dt.floor(
+            'D')  # to enable alignment of dtypes as datetime64[ns] as a date
+        # print(df_clustered.dtypes)
+        df_clustered = df_clustered.reset_index().set_index(
+            ['id', 'night_start_date'])
+
+        df_clustered = df_clustered.join(temp)
+
+        return df_clustered.reset_index().set_index(['id', 'datetime'])
