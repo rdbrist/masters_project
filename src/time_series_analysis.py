@@ -4,11 +4,16 @@ import seaborn as sns
 import time
 import numpy as np
 from loguru import logger
+from datetime import datetime, time, timedelta
 
 from sklearn.metrics import mean_absolute_error
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller
+from tslearn.barycenters import dtw_barycenter_averaging
+from tslearn.utils import to_time_series_dataset
+
+from src.dba import DBAAverager
 
 
 def split_ts(y: pd.DataFrame, ratio: float) -> (
@@ -189,62 +194,116 @@ def remove_zero_or_null_days(df: pd.DataFrame, value_col: str) -> pd.DataFrame:
     return df[date_mask]
 
 def _plot_means_for_individual(
-    df, variables, groupby_cols, x_col, x_label, title
+    df, variables, groupby_cols, x_col, x_label, title, method='mean'
 ):
     if 'hour' not in df:
         dt_index = df.index.get_level_values('datetime')
         df['hour'] = dt_index.hour
 
-    stats = df.groupby(groupby_cols)[variables].agg(['mean', 'var']).reset_index()
-    for var in variables:
-        mean = stats[(var, 'mean')]
-        stats[(var, 'mean_scaled')] = (mean - mean.min()) / (mean.max() - mean.min() + 1e-9)
-        stats[(var, 'std_scaled')] = np.sqrt(stats[(var, 'var')]) / (mean.max() - mean.min() + 1e-9)
+    if method == 'mean':
+        stats = df.groupby(groupby_cols)[variables].agg(['mean', 'var']).reset_index()
+    elif method == 'dba':
+        dbaa = DBAAverager(df[variables], night_start_hour=17, morning_end_hour=11)
+        stats = dbaa.get_dba_and_variance_dataframe()
+        if stats is None:
+            logger.warning("No DBA averaged DataFrame available.")
+            return
+    else:
+        raise ValueError("method must be 'mean' or 'dba'")
 
-    x = stats[x_col]
-    x_labels = stats['hour'].astype(str)
+    x = stats[x_col].astype(str)
+    x_labels = stats['time'].apply(lambda t: t.strftime('%H:%M'))
     plt.figure(figsize=(10, 4))
-    for var, color in zip(variables, ['tab:blue', 'tab:orange', 'tab:green']):
+    colors = ['tab:blue', 'tab:orange', 'tab:green']
+
+    for var, color in zip(variables, colors):
+        avg = stats[(var, method)]
+        var_col = stats.get((var, 'var'), None)
+        # Ensure var_col is a Series, not a float
+        if var_col is None or np.isscalar(var_col):
+            var_col = pd.Series([np.nan] * len(stats), index=stats.index)
+        else:
+            var_col = pd.to_numeric(var_col, errors='coerce')
+        stats[(var, 'mean_scaled')] = (avg - avg.min()) / (
+                    avg.max() - avg.min() + 1e-9)
+        stats[(var, 'std_scaled')] = np.sqrt(var_col) / (
+                    avg.max() - avg.min() + 1e-9)
         y = stats[(var, 'mean_scaled')]
         yerr = stats[(var, 'std_scaled')]
-        plt.plot(x, y, label=f'{var} mean', color=color)
+        plt.plot(x, y, label=f'{var} {method}', color=color)
         plt.fill_between(x, y - yerr, y + yerr, color=color, alpha=0.2)
+
     plt.title(title)
     plt.ylabel('Scaled Value')
     plt.xlabel(x_label)
-    plt.xticks(x, x_labels, rotation=0)
+    plt.xticks(x, x_labels, rotation=90)
     plt.legend()
     plt.tight_layout()
     plt.show()
 
+# def plot_night_means_for_individual(
+#     df, zip_id, variables=None, night_start=17, morning_end=11
+# ):
+#     """
+#     Plot the means of specified variables for an individual during night hours.
+#      :param df: DataFrame containing time series data with a multi-index
+#         including 'id' and 'datetime'.
+#     :param zip_id: int, identifier for the individual.
+#     :param variables: list of str, names of the variables to plot. If None, ['iob mean', 'cob mean', 'bg mean'] are used
+#     :param night_start: int, hour when the night starts (0-23).
+#     :param morning_end: int, hour when the morning ends (0-23).
+#     """
+#     if variables is None:
+#         variables = ['iob mean', 'cob mean', 'bg mean']
+#
+#     def night_hour(hour):
+#         return hour - night_start if hour >= night_start else 24 - night_start + hour
+#     df_new = df.copy()
+#     dt_index = df_new.index.get_level_values('datetime')
+#     df_new['hour'] = dt_index.hour
+#     df_new['night_hour'] = df_new['hour'].map(night_hour)
+#     df_night = df_new[(df_new['hour'] >= night_start) | (df_new['hour'] < morning_end)]
+#     _plot_means_for_individual(
+#         df_night, variables,
+#         groupby_cols=['night_hour', 'hour'],
+#         x_col='night_hour',
+#         x_label='Hour',
+#         title=f'Person {str(zip_id)}'
+#     )
+
 def plot_night_means_for_individual(
-    df, zip_id, variables=None, night_start=17, morning_end=11
+    df, zip_id, variables=None, night_start=17, morning_end=11, method='mean'
 ):
     """
     Plot the means of specified variables for an individual during night hours.
-     :param df: DataFrame containing time series data with a multi-index
-        including 'id' and 'datetime'.
+    :param df: DataFrame containing time series data with a multi-index
     :param zip_id: int, identifier for the individual.
-    :param variables: list of str, names of the variables to plot. If None, ['iob mean', 'cob mean', 'bg mean'] are used
+    :param variables: list of str, names of the variables to plot. If None,
+        ['iob mean', 'cob mean', 'bg mean'] are used
     :param night_start: int, hour when the night starts (0-23).
     :param morning_end: int, hour when the morning ends (0-23).
+    :param method: str, method to use for plotting ('mean' or 'dba').
+    :return:
     """
     if variables is None:
         variables = ['iob mean', 'cob mean', 'bg mean']
 
     def night_hour(hour):
         return hour - night_start if hour >= night_start else 24 - night_start + hour
+
     df_new = df.copy()
     dt_index = df_new.index.get_level_values('datetime')
     df_new['hour'] = dt_index.hour
     df_new['night_hour'] = df_new['hour'].map(night_hour)
+
     df_night = df_new[(df_new['hour'] >= night_start) | (df_new['hour'] < morning_end)]
     _plot_means_for_individual(
         df_night, variables,
-        groupby_cols=['night_hour', 'hour'],
-        x_col='night_hour',
+        groupby_cols=['night_start_date', 'night_hour', 'hour', 'time'] if method == 'dba' else ['night_hour', 'hour', 'time'],
+        x_col='time',
         x_label='Hour',
-        title=f'Person {str(zip_id)}'
+        title=f'Person {str(zip_id)}',
+        method=method
     )
 
 def plot_hourly_means_for_individual(df, zip_id, variables=None):
@@ -266,5 +325,13 @@ def plot_hourly_means_for_individual(df, zip_id, variables=None):
         title=f'Person {str(zip_id)} (hourly means across all days)'
     )
 
+def return_count_intervals(start: time, end: time, minute_interval: int=30) -> int:
+    today = datetime.today().date()
+    dt_start = datetime.combine(today, start)
+    dt_end = datetime.combine(today, end)
+    if dt_end <= dt_start:
+        dt_end += timedelta(days=1)
+    total_minutes = int((dt_end - dt_start).total_seconds() // 60)
+    return total_minutes // minute_interval
 
 

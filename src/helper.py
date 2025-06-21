@@ -135,3 +135,18 @@ def filter_separated_by_ids(separated: List[Tuple[int, pd.DataFrame]], ids: List
     :return: Filtered list of tuples with id and df
     """
     return [(id_, df) for id_, df in separated if id_ in ids]
+
+def load_final_filtered_csv(config: Configuration, interpolate_cob: bool=True) -> pd.DataFrame:
+    """
+    Loads the final filtered CSV file into a DataFrame.
+    :param config: Configuration object containing the path to the final filtered CSV.
+    :return: DataFrame containing the data from the final filtered CSV.
+    """
+    df = pd.read_csv(config.final_filtered_csv)
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    df = df.set_index(['id', 'datetime'])
+    if interpolate_cob:
+        df[['cob mean', 'cob min', 'cob max']] = (
+            df.groupby('id')[['cob mean', 'cob min', 'cob max']].
+            transform(lambda x: x.interpolate(method='linear')))
+    return check_df_index(df)  # Ensure the index is correct

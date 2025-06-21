@@ -35,6 +35,7 @@ class NightAnalyser:
         self.night_pca_components = None
         self.night_clusters = None
         self.rolling_features_df = None
+        self.silhouette_score = None
 
 
         # Store scalers and PCA models
@@ -205,19 +206,24 @@ class NightAnalyser:
         plt.ylabel('cumulative explained variance')
         plt.show()
 
-    def cluster_nights(self, n_clusters, print_clusters=True, plot_2d=True):
+    def cluster_nights(self, n_clusters: int=3, print_clusters: bool=True,
+                       plot_2d: bool=True):
         """
         Clusters the nights using K-Means.
         :param print_clusters: bool, Whether to print cluster distribution.
         :param n_clusters: (int), Number of clusters for K-Means.
         :param plot_2d: (bool), Whether to plot 2D PCA for clusters.
         """
-        if self.night_pca_components is None and self.scaled_night_features is None:
-            raise ValueError("Features not preprocessed yet. Run preprocess_night_features first.")
+        if (self.night_pca_components is None and
+                self.scaled_night_features is None):
+            raise ValueError("Features not preprocessed yet. Run p"
+                             "reprocess_night_features first.")
 
         data_for_clustering = self.night_pca_components if self.night_pca_components is not None else self.scaled_night_features.values
         if data_for_clustering.shape[0] < n_clusters:
-             raise ValueError(f"Number of nights ({data_for_clustering.shape[0]}) is less than n_clusters ({n_clusters}). Cannot cluster.")
+             raise ValueError(
+                 f"Number of nights ({data_for_clustering.shape[0]}) is less "
+                 f"than n_clusters ({n_clusters}). Cannot cluster.")
 
         print(f"Clustering nights into {n_clusters} clusters...")
         kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10) # n_init for robustness
@@ -228,10 +234,13 @@ class NightAnalyser:
             print("Night cluster distribution:")
             print(self.night_features_df['cluster_label'].value_counts())
 
-        self.silhouette_score = silhouette_score(data_for_clustering, self.night_clusters)
+        self.silhouette_score = silhouette_score(data_for_clustering,
+                                                 self.night_clusters)
 
-        if plot_2d and self.night_pca_components is not None and self.night_pca_components.shape[1] >= 2:
-            id_list = pd.Categorical(self.reindex_night_features()['id']).codes.astype(int) + 1000
+        if (plot_2d and self.night_pca_components is not None
+                and self.night_pca_components.shape[1] >= 2):
+            id_list = (pd.Categorical(self.reindex_night_features()['id']).
+                       codes.astype(int) + 1000)
 
             # Build DataFrame for plotting
             plot_df = pd.DataFrame({
@@ -284,7 +293,8 @@ class NightAnalyser:
             plt.title('Nights Clustered (KMeans)')
             plt.xlabel('Principal Component 1')
             plt.ylabel('Principal Component 2')
-            plt.savefig(FIGURES_DIR / 'clustered_nights_pca.png', dpi=400, bbox_inches='tight')
+            plt.savefig(FIGURES_DIR / 'clustered_nights_pca.png', dpi=400,
+                        bbox_inches='tight')
             plt.show()
         elif plot_2d and (self.night_pca_components is None or self.night_pca_components.shape[1] < 2):
             print("Cannot plot 2D PCA: PCA not performed or less than 2 components.")
@@ -347,12 +357,19 @@ class NightAnalyser:
 
         return temp_df
 
-    def return_original_dataset_with_clusters(self):
+    def return_dataset_with_clusters(self, df: pd.DataFrame = None):
         """
         Returns the original dataset with the cluster labels added.
+        :param df: (pd.DataFrame), Optional DataFrame to use instead of self.df.
+                   If None, uses the original DataFrame passed during
+                   initialisation. DataFrame should have a MultiIndex ['id',
+                   'datetime'].
         :return: DataFrame with original features and cluster labels, plus
             'night_start_date' indicating the start of the night period.
         """
+        if df is None:
+            df = self.df.copy()
+
         if self.night_features_df is None:
             raise ValueError("Night features not extracted yet. Run "
                              "extract_night_level_features first.")
@@ -363,7 +380,7 @@ class NightAnalyser:
                 set_index(['id', 'night_start_date'])
                 )
 
-        df_clustered = self.df.reset_index().copy()
+        df_clustered = df.reset_index().copy()
         hour = df_clustered['datetime'].dt.hour
         df_clustered['night_start_date'] = (
                     df_clustered['datetime'] - pd.to_timedelta(
@@ -376,3 +393,47 @@ class NightAnalyser:
         df_clustered = df_clustered.join(temp)
 
         return df_clustered.reset_index().set_index(['id', 'datetime'])
+
+    def visualise_night_features(self, feature_name, cluster_label=None):
+        """
+        Visualises the distribution of a specific night feature.
+        :param feature_name: (str), Name of the feature to visualize.
+        :param cluster_label: (int or None), If provided, filters by cluster label.
+        """
+        if self.night_features_df is None:
+            raise ValueError("Night features not extracted yet. Run "
+                             "extract_night_level_features first.")
+
+        if feature_name not in self.night_features_df.columns:
+            raise ValueError(f"Feature '{feature_name}' not found in night features.")
+
+        data = self.night_features_df.copy()
+        if cluster_label is not None:
+            data = data[data['cluster_label'] == cluster_label]
+
+        plt.figure(figsize=(10, 6))
+        sns.boxplot(x='cluster_label', y=feature_name, data=data)
+        plt.title(f'Distribution of {feature_name} by Cluster')
+        plt.xlabel('Cluster Label')
+        plt.ylabel(feature_name)
+        plt.savefig(FIGURES_DIR / f'night_feature_{feature_name}.png', dpi=400, bbox_inches='tight')
+        plt.show()
+
+    def heatmap_cluster_features(self):
+        """
+        Visualizes the mean features for each cluster as a heatmap.
+        :param cluster_label: (int or None), If provided, filters by cluster label.
+        """
+        if self.night_features_df is None:
+            raise ValueError("Night features not extracted yet. Run "
+                             "extract_night_level_features first.")
+
+        heatmap_data = self.scaled_night_features.copy()
+        heatmap_data['cluster_label'] = self.night_clusters
+        heatmap_data = heatmap_data.groupby('cluster_label').mean().T
+        plt.figure(figsize=(6, 14))
+        sns.heatmap(heatmap_data, annot=True, cmap='viridis')
+        plt.title('Cluster Centroids: Feature Means')
+        plt.xlabel('Cluster', verticalalignment='top')
+        plt.ylabel('Feature')
+        plt.show()

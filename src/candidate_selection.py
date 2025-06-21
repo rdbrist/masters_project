@@ -10,6 +10,7 @@ from datetime import time, datetime
 from src.helper import check_df_index
 from src.config import FIGURES_DIR
 
+
 class Nights:
     def __init__(self, zip_id: int,
                  df: pd.DataFrame,
@@ -23,9 +24,20 @@ class Nights:
         self.df = df.sort_index()
         self.night_start = night_start
         self.morning_end = morning_end
+        self.df['night_start_date'] = (self.df.index.
+                                       map(self.get_night_start_date))
         self.nights = self._split_nights()
         self.stats_per_night = self._create_stats_per_night()
         self.overall_stats = self._calculate_overall_stats()
+
+    def get_night_start_date(self, timestamp, night_start_hour=None):
+        """Determine the start date of the night period based on the timestamp."""
+        if night_start_hour is None:
+            night_start_hour = self.night_start.hour
+        if timestamp.hour >= night_start_hour:
+            return timestamp.date()
+        else:
+            return (timestamp - pd.Timedelta(days=1)).date()
 
     def get_night_period(self, date):
         """
@@ -40,6 +52,17 @@ class Nights:
         else:
             morning_end_dt = pd.Timestamp.combine(date_obj, self.morning_end)
         return night_start_dt, morning_end_dt
+
+    def get_df_for_night(self, date):
+        """
+        Returns the DataFrame for the night period defined by the date from the
+        nights attribute of tuples (night_start_date, night_df).
+        :param date: Date for which to get the night DataFrame
+        :return: DataFrame for the night period
+        """
+        for nights_start_date, night_df in self.nights:
+            if nights_start_date.date() == date:
+                return night_df
 
     def _get_total_minutes(self):
         """
@@ -75,7 +98,7 @@ class Nights:
             mask = (self.df.index >= night_start_dt) & (self.df.index < morning_end_dt)
             night_df = self.df.loc[mask]
             if not night_df.empty:
-                nights.append(night_df)
+                nights.append((night_start_dt.date(), night_df))
 
         return nights
 
@@ -115,8 +138,11 @@ class Nights:
         :return: List of dicts, one per night
         """
         stats = []
-        for night_df in self.nights:
-            date = night_df.index[0].date()
+        for night_start_date, night_df in self.nights:
+            if night_df.index[0].hour < self.night_start.hour:
+                date = night_df.index[0].date() - pd.Timedelta(days=1)
+            else:
+                date = night_df.index[0].date()
             night_start_dt, morning_end_dt = self.get_night_period(date)
             expected_index = pd.date_range(
                 start=night_start_dt,
@@ -135,6 +161,7 @@ class Nights:
             max_break_length = breaks.max() if num_breaks > 0 else 0
             total_break_length = breaks.sum() if num_breaks > 0 else 0
             stats.append({
+                'night_date': date,
                 'num_intervals': num_intervals,
                 'missed_intervals': np.sum(vector),
                 'num_breaks': num_breaks,
@@ -151,8 +178,13 @@ class Nights:
         Removes nights that have missing intervals, i.e. where the number of missed intervals is greater than 0.
         :return: self with incomplete nights removed
         """
-        self.stats_per_night = [s for s in self.stats_per_night if s['missed_intervals'] == 0]
-        self.nights = [self.nights[i] for i, s in enumerate(self.stats_per_night) if s['missed_intervals'] == 0]
+        self.stats_per_night = [s for s in self.stats_per_night if
+                                s['missed_intervals'] == 0]
+        desired_dates = {s['night_date'] for s in self.stats_per_night if
+                         s['missed_intervals'] == 0}
+        # Filter self.nights to only those with a matching date
+        self.nights = [night for night in self.nights if
+                       night[0] in desired_dates]
         self.overall_stats = self._calculate_overall_stats()
 
         return self
@@ -249,7 +281,7 @@ class Nights:
         n_nights = vectors_arr.shape[0]
 
         # Get time labels for x-axis
-        date = self.nights[0].index[0].date()
+        date = self.nights[0][0]
         night_start_dt, morning_end_dt = self.get_night_period(date)
         expected_index = pd.date_range(
             start=night_start_dt,
@@ -419,7 +451,7 @@ def reconsolidate_flat_file_from_nights(
     """
     flat_file = pd.DataFrame()
     for nights in nights_objects:
-        for night_df in nights.nights:
+        for night_start_date, night_df in nights.nights:
             # Ensure the index is a DatetimeIndex
             if not isinstance(night_df.index, pd.DatetimeIndex):
                 raise ValueError("Night DataFrame index must be a DatetimeIndex.")

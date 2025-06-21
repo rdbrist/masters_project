@@ -11,6 +11,7 @@ from src.candidate_selection import remove_null_variable_individuals, \
     plot_nights_vs_avg_intervals
 from src.configurations import Configuration, Irregular, ThirtyMinute, \
     FifteenMinute
+from src.data_analysis import nans_per_column
 from src.data_processing.read import (read_all_device_status,
                                       get_all_offsets_df_from_profiles)
 from src.data_processing.read_preprocessed_df import (
@@ -21,6 +22,7 @@ from src.data_processing.preprocess import dedup_device_status_dataframes
 from src.data_processing.resampling import ResampleDataFrame
 from src.config import INTERIM_DATA_DIR
 from src.helper import separate_flat_file, filter_separated_by_ids
+from src.night_analysis import NightAnalyser
 from src.time_series_analysis import plot_night_means_for_individual
 
 
@@ -28,8 +30,10 @@ def main():
     start_time = time.time()
     config = Configuration()
     sampling = ThirtyMinute()
-    night_start = datetime.time(17, 0)  # 5 PM
-    morning_end = datetime.time(11, 0) # 11 AM
+    night_hour = 17
+    morning_hour = 11
+    night_start = datetime.time(night_hour, 0)  # 5 PM
+    morning_end = datetime.time(morning_hour, 0) # 11 AM
     resampled_parquet_file = (INTERIM_DATA_DIR /
                               sampling.file_name('parquet'))
 
@@ -145,8 +149,32 @@ def main():
 
     for zip_id in candidates:
         plot_night_means_for_individual(df_all_selected, zip_id,
-                                        night_start=night_start.hour,
-                                        morning_end=morning_end.hour)
+                                        night_start=night_hour,
+                                        morning_end=morning_hour)
+
+    # STAGE 6 : Cluster nights before finding events
+    # -------------------------------------------------------------------------
+
+    # 1. Analyse nans and remove:
+    nans_per_column(df_all_selected)
+
+    # 2. Interpolate NaNs in COB columns, based on results and select variables
+    df_all_selected[['cob mean', 'cob min', 'cob max']] = (
+        df_all_selected.groupby('id')[['cob mean', 'cob min', 'cob max']].
+        transform(lambda x: x.interpolate(method='linear')))
+    df_variables = (
+        df[['iob mean', 'cob mean', 'bg mean', 'cob max', 'iob max']].copy())
+
+    # 3. Extract night-level features and clusters
+    cluster_range = range(2, 7)
+    analyser = NightAnalyser(df=df_variables, feature_settings='custom')
+    night_features = analyser.extract_night_level_features(
+        night_start_hour=night_hour)
+    pca_features = analyser.preprocess_night_features(n_components=2)
+    print(f'Explained variance: {analyser.pca_model.explained_variance_ratio_}')
+    silhouette_scores = analyser.silhouette_analysis(cluster_range)
+    night_clusters = analyser.cluster_nights(n_clusters=3)
+    analyser.heatmap_cluster_features()
 
 
 if __name__ == "__main__":
