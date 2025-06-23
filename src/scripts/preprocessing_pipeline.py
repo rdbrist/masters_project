@@ -7,8 +7,9 @@ from datetime import timedelta
 from loguru import logger
 
 from src.candidate_selection import remove_null_variable_individuals, \
-    provide_data_statistics, Nights, reconsolidate_flat_file_from_nights, \
+    provide_data_statistics, reconsolidate_flat_file_from_nights, \
     plot_nights_vs_avg_intervals
+from src.nights import Nights
 from src.configurations import Configuration, Irregular, ThirtyMinute, \
     FifteenMinute
 from src.data_analysis import nans_per_column
@@ -22,7 +23,7 @@ from src.data_processing.preprocess import dedup_device_status_dataframes
 from src.data_processing.resampling import ResampleDataFrame
 from src.config import INTERIM_DATA_DIR
 from src.helper import separate_flat_file, filter_separated_by_ids
-from src.night_analysis import NightAnalyser
+from src.night_clustering import NightClustering
 from src.time_series_analysis import plot_night_means_for_individual
 
 
@@ -167,7 +168,7 @@ def main():
 
     # 3. Extract night-level features and clusters
     cluster_range = range(2, 7)
-    analyser = NightAnalyser(df=df_variables, feature_settings='custom')
+    analyser = NightClustering(df=df_variables, feature_settings='custom')
     night_features = analyser.extract_night_level_features(
         night_start_hour=night_hour)
     pca_features = analyser.preprocess_night_features(n_components=2)

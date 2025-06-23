@@ -15,10 +15,14 @@ from src.helper import check_df_index
 from src.config import FIGURES_DIR
 
 
-class NightAnalyser:
+class NightClustering:
+    """
+    Class uses feature-based clustering to identify patterns in night periods,
+    using the tsfresh library for feature extraction.
+    """
     def __init__(self, df, feature_settings='custom'):
         """
-        Initialises the NightAnalyser with the preprocessed time series data. It is assumed the DataFrame has a MultiIndex with 'id' and 'datetime', of night periods with consistent and complete intervals between a consistent start and end time.
+        Initialises the NightClustering with the preprocessed time series data. It is assumed the DataFrame has a MultiIndex with 'id' and 'datetime', of night periods with consistent and complete intervals between a consistent start and end time.
         :param df: Pandas DataFrame containing the time series data.
         :param feature_settings: str, 'comprehensive', 'efficient', 'minimal', or 'custom'. Defines tsfresh feature extraction settings.
         """

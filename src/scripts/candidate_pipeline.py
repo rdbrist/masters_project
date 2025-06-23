@@ -6,8 +6,8 @@ from src.helper import separate_flat_file, filter_separated_by_ids
 from src.candidate_selection import (remove_null_variable_individuals,
                                      provide_data_statistics,
                                      plot_nights_vs_avg_intervals,
-                                     Nights,
                                      reconsolidate_flat_file_from_nights)
+from src.nights import Nights
 from src.data_processing.read_preprocessed_df import (apply_and_filter_by_offsets,
                                                       ReadPreprocessedDataFrame)
 from src.resample import resample_to_30_minute_intervals
