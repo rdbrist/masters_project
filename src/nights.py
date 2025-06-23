@@ -131,6 +131,9 @@ class Nights:
             'complete_nights':
                 sum(1 for d in self.stats_per_night if
                     d['missed_intervals'] == 0),
+            'single_interval_nights':
+                sum(1 for d in self.stats_per_night if
+                    d['missed_intervals'] == 1),
             'avg_num_intervals':
                 sum(d['num_intervals'] for d in
                     self.stats_per_night) / count_of_nights,

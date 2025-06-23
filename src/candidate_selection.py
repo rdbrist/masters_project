@@ -38,8 +38,10 @@ def provide_data_statistics(separated: list[Tuple[int, pd.DataFrame]],
                             night_start: time=time(19, 0),
                             morning_end: time=time(11, 0)) -> pd.DataFrame:
     """
-    Creates statistics useful in assessing the level of completeness of the
-    data sought.
+    Creates statistics from the analysis of the nights of an individual through
+    iteration of the Nights class. Useful in assessing the level of
+    completeness of the data sought, plus other important statistics for
+    analsis.
     :param separated: List of tuples of id and dataframe, where the df is the
         time series data for an individual
     :param sample_rate: Sample rate in minutes, default is 15
