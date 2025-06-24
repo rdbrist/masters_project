@@ -32,8 +32,20 @@ class Nights:
         self.df['night_start_date'] = (self.df.index.
                                        map(self.get_night_start_date))
         self.nights = self._split_nights()
+        self.bg_mean, self.bg_std = self._calculate_bg_mean_and_sd()
         self.stats_per_night = self._create_stats_per_night()
         self.overall_stats = self._calculate_overall_stats()
+
+    def _calculate_bg_mean_and_sd(self):
+        """
+        Calculates the mean blood glucose across all night periods.
+        :return: Tuple of floats representing the mean and standard deviation
+            of blood glucose for all nights
+        """
+        bg_mean = pd.Series
+        for _, night_df in self.nights:
+            bg_mean = pd.concat([bg_mean, night_df['bg mean']])
+        return (bg_mean.mean(), bg.std())
 
     def get_night_start_date(self, timestamp, night_start_hour=None):
         """Determine the start date of the night period based on the timestamp."""
@@ -66,7 +78,7 @@ class Nights:
         :return: DataFrame for the night period
         """
         for nights_start_date, night_df in self.nights:
-            if nights_start_date.date() == date:
+            if nights_start_date == date:
                 return night_df
 
     def _get_total_minutes(self):
@@ -193,6 +205,7 @@ class Nights:
             if night_df['bg mean'].dtype != 'Float32':
                 print(self.zip_id)
             bg = night_df['bg mean'].astype(float)
+            bg_night_mean = bg.mean()
             stats.append({
                 'night_date': date,
                 'num_intervals': num_intervals,
@@ -204,8 +217,9 @@ class Nights:
                 'missed_interval_vector': vector.tolist(),
                 'bg_sd': bg.std(),
                 'bg_range': bg.max() - bg.min(),
-                'bg_mean': bg.mean(),
+                'bg_mean': bg_night_mean,
                 'bg_iqr': bg.quantile(0.75) - bg.quantile(0.25),
+                'bg_zscore': (bg_night_mean - self.bg_mean) / self.bg_std
             })
 
         return stats
