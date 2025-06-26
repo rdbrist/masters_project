@@ -39,7 +39,8 @@ def main():
     separated = separate_flat_file(df_processed)
 
     # 5. Process the data through the Nights class
-    df_overall_stats = provide_data_statistics(separated,
+    df_overall_stats = provide_data_statistics(separated, night_start=night_start,
+                                               morning_end=morning_end,
                                                sample_rate=new_sample_rate)
 
     # 6. Aggregate stats and visualise the data

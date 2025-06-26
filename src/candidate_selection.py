@@ -34,7 +34,7 @@ def remove_null_variable_individuals(df: pd.DataFrame) -> pd.DataFrame:
     return df[~df.index.get_level_values('id').isin(ids)]
 
 def provide_data_statistics(separated: list[Tuple[int, pd.DataFrame]],
-                            sample_rate: int=15,
+                            sample_rate: int=None,
                             night_start: time=time(19, 0),
                             morning_end: time=time(11, 0)) -> pd.DataFrame:
     """
@@ -49,25 +49,37 @@ def provide_data_statistics(separated: list[Tuple[int, pd.DataFrame]],
     :param morning_end: Time when the night ends, default is 11:00
     :return: Dataframe with the statistics calculated for individuals
     """
-    overall_stats_list = []
-    for id_val, df_individual in separated:
-        nights = Nights(zip_id=id_val,
-                        df=df_individual,
-                        sample_rate=sample_rate,
-                        night_start=night_start,
-                        morning_end=morning_end)
-        stats = nights.overall_stats
-        if stats:  # skip if stats is None
-            stats['id'] = id_val
-            stats['period_total_intervals'] = nights.total_intervals()
-            stats['period_total_minutes'] = nights.total_minutes()
-            overall_stats_list.append(stats)
+    overall_stats_list = create_nights_objects(separated=separated,
+                            sample_rate=sample_rate,
+                            night_start=night_start,
+                            morning_end=morning_end)
 
     df_overall_stats = pd.DataFrame(overall_stats_list)
     df_overall_stats = df_overall_stats.set_index('id')
     df_overall_stats.sort_values('complete_nights', ascending=False)
 
     return df_overall_stats
+
+def create_nights_objects(separated: (int, pd.DataFrame)=None,
+                          sample_rate: int=None,
+                          night_start: time=None,
+                          morning_end: time=None) -> [Nights]:
+    """
+    Creates Nights objects from list of separated dataframes for each
+    patient
+    :param separated: 
+    :param sample_rate: Sample rate in minutes
+    :param night_start: Time when the night starts
+    :param morning_end: Time when the night ends
+    :return: List of Nights objects
+    """
+    for id_val, df_individual in separated:
+        nights = Nights(zip_id=id_val,
+                        df=df_individual,
+                        sample_rate=sample_rate,
+                        night_start=night_start,
+                        morning_end=morning_end)
+    return nights
 
 def plot_nights_vs_avg_intervals(df_overall_stats: pd.DataFrame):
     """
