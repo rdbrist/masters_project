@@ -1,5 +1,5 @@
 from datetime import time, datetime
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -33,9 +33,22 @@ class Nights:
         self.df['night_start_date'] = (self.df.index.
                                        map(self.get_night_start_date))
         self.nights = self._split_nights()
+        self._calculate_stats()
+
+    def _calculate_stats(self):
         self.bg_mean, self.bg_std = self._calculate_bg_mean_and_sd()
         self.stats_per_night = self._create_stats_per_night()
         self.overall_stats = self._calculate_overall_stats()
+
+    def update_nights(self, nights: List[Tuple[datetime.date, pd.DataFrame]]):
+        """
+        Updates the nights attribute with a new list of nights.
+        :param nights: List of tuples (night_start_date, night_df)
+        """
+        self.nights = nights
+        self._calculate_stats()
+
+        return self
 
     def _calculate_bg_mean_and_sd(self):
         """
@@ -391,8 +404,8 @@ class Nights:
         plt.tight_layout()
         plt.show()
 
-def get_filtered_nights(nights: Nights, missed_intervals: int) \
-        -> List[(datetime.date, pd.DataFrame)]:
+def filter_nights(nights: Nights, missed_intervals: int) \
+        -> List[Tuple[datetime.date, pd.DataFrame]]:
     """
     Returns a list of only the nights within the number of missing intervals
     provided.
@@ -408,3 +421,17 @@ def get_filtered_nights(nights: Nights, missed_intervals: int) \
         if night_date in night_dates]
 
     return  filtered_nights
+
+def nights_with_missed_intervals(
+        nights_objects: List[Nights], missed_intervals: int) -> List[Nights]:
+    """
+    Returns a list of Nights objects that have the specified number of
+    missed intervals.
+    :param nights_objects: List of Nights objects
+    :param missed_intervals: Number of missed intervals to filter by
+    :return: List of Nights objects with the specified number of missed
+        intervals
+    """
+    return [nights for nights in nights_objects if
+            any(s['missed_intervals'] <= missed_intervals
+                for s in nights.stats_per_night)]
