@@ -1,4 +1,5 @@
 from datetime import time, datetime
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -42,10 +43,15 @@ class Nights:
         :return: Tuple of floats representing the mean and standard deviation
             of blood glucose for all nights
         """
-        bg_mean = pd.Series
+        bg_mean = None
         for _, night_df in self.nights:
-            bg_mean = pd.concat([bg_mean, night_df['bg mean']])
-        return (bg_mean.mean(), bg.std())
+            if bg_mean is None:
+                bg_mean = night_df['bg mean'].astype(float).copy()
+            else:
+                bg_mean = pd.concat([bg_mean, night_df['bg mean'].astype(float)])
+        if bg_mean is None or bg_mean.empty:
+            return np.nan, np.nan
+        return bg_mean.mean(), bg_mean.std()
 
     def get_night_start_date(self, timestamp, night_start_hour=None):
         """Determine the start date of the night period based on the timestamp."""
@@ -80,6 +86,9 @@ class Nights:
         for nights_start_date, night_df in self.nights:
             if nights_start_date == date:
                 return night_df
+
+    def get_stats_per_night(self):
+        return self.stats_per_night
 
     def _get_total_minutes(self):
         """
@@ -381,3 +390,21 @@ class Nights:
 
         plt.tight_layout()
         plt.show()
+
+def get_filtered_nights(nights: Nights, missed_intervals: int) \
+        -> List[(datetime.date, pd.DataFrame)]:
+    """
+    Returns a list of only the nights within the number of missing intervals
+    provided.
+    intervals.
+    :param nights: Nights object
+    :param missed_intervals: Number of nights intervals missing to filter by
+    :return: List of objects with shape (id, [night_df, ...])
+    """
+    night_dates = [s['night_date'] for s in nights.stats_per_night
+                   if s['missed_intervals'] <= missed_intervals]
+    filtered_nights = [
+        (night_date, night_df) for night_date, night_df in nights.nights
+        if night_date in night_dates]
+
+    return  filtered_nights

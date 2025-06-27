@@ -7,7 +7,7 @@ from datetime import timedelta
 from loguru import logger
 
 from src.candidate_selection import remove_null_variable_individuals, \
-    provide_data_statistics, reconsolidate_flat_file_from_nights, \
+    get_all_individuals_night_stats, reconsolidate_flat_file_from_nights, \
     plot_nights_vs_avg_intervals
 from src.nights import Nights
 from src.configurations import Configuration, Irregular, ThirtyMinute, \
@@ -120,7 +120,7 @@ def main():
     separated = separate_flat_file(df_processed)
 
     # 3. Process the data through the Nights class
-    df_overall_stats = provide_data_statistics(separated,
+    df_overall_stats = get_all_individuals_night_stats(separated,
                                                sample_rate=sampling.minutes,
                                                night_start=night_start,
                                                morning_end=morning_end)

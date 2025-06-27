@@ -5,6 +5,7 @@ import dataclasses
 import glob
 import pandas as pd
 import numpy as np
+from scipy.stats import skew, kurtosis
 from typing import Tuple, List, Union
 from pathlib import Path
 
@@ -150,3 +151,17 @@ def load_final_filtered_csv(config: Configuration, interpolate_cob: bool=True) -
             df.groupby('id')[['cob mean', 'cob min', 'cob max']].
             transform(lambda x: x.interpolate(method='linear')))
     return check_df_index(df)  # Ensure the index is correct
+
+def calculate_skew_kurtosis(df: pd.DataFrame,
+                            variables: list = None) -> pd.DataFrame:
+    """
+    Calculate skewness and kurtosis for the variables included.
+    :param df: (DataFrame) DataFrame containing the variables.
+    :param variables: (list) List of variables to calculate skewness and
+        kurtosis for.
+    :return: (DataFrame) DataFrame with skewness and kurtosis values.
+    """
+    skewness = df[variables].apply(skew)
+    kurt = df[variables].apply(kurtosis)
+
+    return pd.DataFrame({'Skewness': skewness, 'Kurtosis': kurt})

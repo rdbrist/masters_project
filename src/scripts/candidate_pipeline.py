@@ -4,7 +4,7 @@ from loguru import logger
 from src.configurations import Configuration, FifteenMinute
 from src.helper import separate_flat_file, filter_separated_by_ids
 from src.candidate_selection import (remove_null_variable_individuals,
-                                     provide_data_statistics,
+                                     get_all_individuals_night_stats,
                                      plot_nights_vs_avg_intervals,
                                      reconsolidate_flat_file_from_nights)
 from src.nights import Nights
@@ -39,7 +39,7 @@ def main():
     separated = separate_flat_file(df_processed)
 
     # 5. Process the data through the Nights class
-    df_overall_stats = provide_data_statistics(separated, night_start=night_start,
+    df_overall_stats = get_all_individuals_night_stats(separated, night_start=night_start,
                                                morning_end=morning_end,
                                                sample_rate=new_sample_rate)
 

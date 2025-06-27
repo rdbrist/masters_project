@@ -71,9 +71,9 @@ class ReadPreprocessedDataFrame:
         return df
 
 
-def apply_and_filter_by_offsets(
-        offsets_df: pd.DataFrame = None,
-        interim_df: pd.DataFrame = None) -> pd.DataFrame:
+def apply_and_filter_by_offsets(offsets_df: pd.DataFrame = None,
+                                interim_df: pd.DataFrame = None,
+                                verbose: bool = True) -> pd.DataFrame:
     """
     Applies the offsets from the offsets_df to the datetime column in the
     interim_df, such that they are adjusted. The offsets_df is assumed to
@@ -81,6 +81,7 @@ def apply_and_filter_by_offsets(
     :param offsets_df: Dataframe of offsets with id as index and an integer for
         the offset to apply to all timestamps for that person.
     :param interim_df: Dataframe to which the offsets have to be applied.
+    :param verbose: If True, logs the ids that are missing in the offsets_df.
     :return: Dataframe with the same shape, with timestamps offset, and limited
         to only those ids that exist in both.
     """
@@ -97,7 +98,7 @@ def apply_and_filter_by_offsets(
     missing_ids = (
             set(interim_df.index.get_level_values('id')) -
             set(offsets_df.index))
-    if missing_ids:
+    if missing_ids and verbose:
         logger.info(f"IDs missing in offsets_df: {missing_ids}")
     interim_df = interim_df[~interim_df.index.get_level_values('id').isin(missing_ids)]
     interim_df = interim_df.reset_index()

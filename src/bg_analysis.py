@@ -1,11 +1,10 @@
 import seaborn as sns
 import pandas as pd
-from scipy.stats import skew, kurtosis
 from matplotlib import pyplot as plt
 from datetime import time
 
-from src.candidate_selection import provide_data_statistics, \
-    create_nights_objects
+from src.candidate_selection import get_all_individuals_night_stats, \
+    create_nights_objects, provide_data_statistics
 from src.nights import Nights
 
 
@@ -23,6 +22,7 @@ class BGAnalyser:
                              'the BGAnalysis class.')
 
         self.separated_dfs = separated_dfs
+        self.zip_ids = [p[0] for p in separated_dfs]
         self.night_start = night_start
         self.morning_end = morning_end
         self.sample_rate = sample_rate
@@ -30,7 +30,48 @@ class BGAnalyser:
                                                     night_start=night_start,
                                                     morning_end=morning_end,
                                                     sample_rate=sample_rate)
+        self.population_stats = provide_data_statistics(self.nights_objects)
 
+    def get_nights_objects(self):
+        return self.nights_objects
+
+    def _return_z_scores(self):
+        zscore_data = []
+        for nights in self.nights_objects:
+            bg_zscore = [stats['bg_zscore'] for stats in
+                         nights.get_stats_per_night()]
+            night_dates = [stats['night_date'] for stats in
+                         nights.get_stats_per_night()]
+            series = pd.Series(bg_zscore, index=night_dates)
+            for i, z in enumerate(bg_zscore):
+                zscore_data.append({'zip_id': nights.zip_id,
+                                    'night_date': night_dates[i],
+                                    'bg_zscore': z})
+
+        return pd.DataFrame(zscore_data)
+
+    def plot_z_scores_per_individual(self):
+        df_zscore = self._return_z_scores()
+        counts = df_zscore.groupby('zip_id').size().to_dict()
+
+        g = sns.FacetGrid(df_zscore, col='zip_id', col_wrap=3, height=2.5,
+                          aspect=1)
+        g.map(sns.histplot, 'bg_zscore', kde=True)
+
+        # Set custom titles for each facet
+        for zip_id, ax in g.axes_dict.items():
+            count = counts.get(zip_id, 0)
+            ax.set_title(f'Person {zip_id}\nN={count}', fontsize=10)
+
+        g.set_axis_labels('Z-Score', 'Count')
+        g.tight_layout()
+        g.fig.subplots_adjust(top=1.01)
+        g.fig.suptitle(
+            'Blood Glucose Z-Scores by Individual for individuals\n'
+            'with => 30 complete nights for the period 22:00-06:00',
+            y=1.05)
+
+        plt.show()
 
     def plot_bg_variability(self):
         """
@@ -42,7 +83,7 @@ class BGAnalyser:
                   .melt(value_vars=cols, var_name='Variability Measure',
                         value_name='Value'))
 
-        fig, ax1 = plt.subplots(figsize=(10, 6))
+        fig, ax1 = plt.subplots(figsize=(6, 4))
 
         sns.boxplot(x='Variability Measure', y='Value', data=melted[
             melted['Variability Measure'].isin(['bg_sd_median', 'bg_iqr_median'])],
@@ -52,28 +93,34 @@ class BGAnalyser:
         ax1.set_title(
             'Distribution of Blood Glucose Variability Measures (Median per '
             'Individual)')
+        ax1.grid(False)
 
         ax2 = ax1.twinx()
         sns.boxplot(x='Variability Measure', y='Value',
                     data=melted[melted['Variability Measure'] == 'bg_range_median'],
-                    ax=ax2, boxprops=dict(facecolor='lightcoral', alpha=0.5))
+                    ax=ax2, boxprops=dict(facecolor='coral', alpha=0.5))
         ax2.set_ylabel('Range (mg/dL)')
+        ax2.grid(False)
 
         ax1.set_xticks([0, 1, 2])
         ax1.set_xticklabels(['SD', 'IQR', 'Range'])
         plt.tight_layout()
         plt.show()
 
-def calculate_skew_kurtosis(df: pd.DataFrame,
-                            variables: list = None) -> pd.DataFrame:
+def plot_zscores_individual_boxplot(zip_id: int = None,
+                                         nights: Nights = None):
     """
-    Calculate skewness and kurtosis for the variables included.
-    :param df: (DataFrame) DataFrame containing the variables.
-    :param variables: (list) List of variables to calculate skewness and
-        kurtosis for.
-    :return: (DataFrame) DataFrame with skewness and kurtosis values.
+    Plot the z-scores of the blood glucose values for an individual in a boxplot.
+    :param zip_id: (int) ID of the zip code to filter the nights.
+    :param nights: (Nights) Nights object containing the nights data.
+    :return:
     """
-    skewness = df[variables].apply(skew)
-    kurt = df[variables].apply(kurtosis)
+    if zip_id is None or nights is None:
+        raise ValueError('zip_id and nights parameters need to be set.')
 
-    return pd.DataFrame({'Skewness': skewness, 'Kurtosis': kurt})
+    stats = nights.get_stats_per_night()
+    zscores = stats['bg_zscore']
+
+    sns.boxplot(zscores, color='lightblue')
+
+

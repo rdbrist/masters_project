@@ -290,8 +290,8 @@ def plot_night_means_for_individual(
 
     def night_hour(hour):
         return hour - night_start if hour >= night_start else 24 - night_start + hour
-
     df_new = df.copy()
+    night_count = df_new['night_start_date'].nunique()
     dt_index = df_new.index.get_level_values('datetime')
     df_new['hour'] = dt_index.hour
     df_new['night_hour'] = df_new['hour'].map(night_hour)
@@ -302,7 +302,7 @@ def plot_night_means_for_individual(
         groupby_cols=['night_start_date', 'night_hour', 'hour', 'time'] if method == 'dba' else ['night_hour', 'hour', 'time'],
         x_col='time',
         x_label='Hour',
-        title=f'Person {str(zip_id)}',
+        title=f'Person {str(zip_id)}, nights: {night_count}',
         method=method
     )
 
