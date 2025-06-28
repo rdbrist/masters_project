@@ -165,3 +165,12 @@ def calculate_skew_kurtosis(df: pd.DataFrame,
     kurt = df[variables].apply(kurtosis)
 
     return pd.DataFrame({'Skewness': skewness, 'Kurtosis': kurt})
+
+def obfuscate_ids(series: pd.Series) -> pd.Series:
+    """
+    Obfuscate the id in the series by converting it to a list of ids starting
+    from 1000
+    :param series: (pd.Series) Series containing the ids to obfuscate.
+    :return: (list) List of obfuscated ids starting from 1000.
+    """
+    return pd.Categorical(series).codes.astype(int) + 1000

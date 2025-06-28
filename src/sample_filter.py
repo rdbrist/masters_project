@@ -9,7 +9,7 @@ from src.data_processing.read import read_profile_offsets_csv
 from src.data_processing.read_preprocessed_df import ReadPreprocessedDataFrame, \
     apply_and_filter_by_offsets
 from src.helper import separate_flat_file
-from src.nights import filter_nights
+from src.nights import filter_nights, consolidate_df_from_nights
 from src.configurations import Configuration
 
 
@@ -17,13 +17,17 @@ class SampleFilter:
     """Class to filter samples based on offsets and other criteria."""
     def __init__(self, night_start: time=None, morning_end: time=None,
                  sampling: Resampling=None, missed_intervals: int=None,
-                 min_nights: int=None):
+                 max_break_run: float=None,
+                 min_nights: int=None,
+                 cob_nan_min: float=1,
+                 iob_nan_min: float=1):
         """
         Initialises the SampleFilter class.
         :param night_start: (time) Time of night start, e.g. 17:00
         :param morning_end: (time) End of the morning, e.g. 11:00
         :param sampling: (Resampling) Resampling class, e.g. Thirty().
         :param missed_intervals: (int) Allowable missed intervals for nights.
+        :param max_break_run: (float) Max string of missing intervals for nights.
         :param min_nights: (int) Minimum number of nights required for candidate
         """
         if any(p is None for p in [night_start, morning_end, sampling,
@@ -36,6 +40,9 @@ class SampleFilter:
         self.night_start = night_start
         self.morning_end = morning_end
         self.sample_rate = sampling.minutes
+        self.min_nights = min_nights
+        self.missed_intervals = missed_intervals
+        self.max_avg_break = max_break_run
 
         config = Configuration()
         df_offsets = read_profile_offsets_csv(config)
@@ -48,25 +55,41 @@ class SampleFilter:
                                                    night_start=night_start,
                                                    morning_end=morning_end,
                                                    sample_rate=self.sample_rate)
-        self.stats = provide_data_statistics(self.nights_objects)
-        self.candidates = []
-        self._apply_constraints(missed_intervals, min_nights)
+        self.apply_constraints(missed_intervals, max_break_run, min_nights,
+                                cob_nan_min, iob_nan_min)
 
 
-    def _apply_constraints(self, missed_intervals: int=None, min_nights: int=None):
+
+    def apply_constraints(self, missed_intervals: int=None,
+                           max_break_run: float=None,
+                           min_nights: int=None,
+                           cob_nan_min: float=0.1,
+                           iob_nan_min: float=0.1):
         """
         Filters the nights by the applied constraint for each Nights object,
         such that only valid nights are retained.
         :param missed_intervals: (int) Number of missed intervals allowed
+        :param max_break_run: (float) Maximum string of missing intervals
+        :param min_nights: (int) Minimum number of nights required for candidate
+        :param cob_nan_min: (float) Minimum percentage of COB NaN allowed
+        :param iob_nan_min: (float) Minimum percentage of IOB NaN allowed
         """
         new_nights_objs = []
+        night_count = 0
+        self.candidates = []
         for nights_obj in self.nights_objects:
             new_nights_list = (
-                filter_nights(nights_obj, missed_intervals=missed_intervals))
+                filter_nights(nights_obj, missed_intervals=missed_intervals,
+                              max_break_run=max_break_run,
+                              cob_nan_min=cob_nan_min,
+                              iob_nan_min=iob_nan_min))
             if len(new_nights_list) >= min_nights:
                 self.candidates.append(nights_obj.zip_id)
                 new_nights_objs.append(nights_obj.update_nights(new_nights_list))
+                night_count += len(nights_obj.nights)
         self.nights_objects = new_nights_objs
+        self.night_count = night_count
+        self.stats = provide_data_statistics(self.nights_objects)
 
     def get_filtered_candidates(self):
         """
@@ -88,3 +111,23 @@ class SampleFilter:
         :return: DataFrame with statistics for the candidates.
         """
         return self.stats[self.stats.index.isin(self.candidates)]
+
+    def get_consolidated_df(self):
+        """
+        Returns a consolidated DataFrame for the filtered candidates.
+        :return: DataFrame with consolidated data for the candidates.
+        """
+        return consolidate_df_from_nights(self.nights_objects)
+
+    def return_counts(self, logging: bool=True):
+        """
+        Prints the counts of candidates and nights.
+        """
+        if logging:
+            logger.info(f'For sample rate of {self.sample_rate} minutes:'
+                        f'\n  min_nights={self.min_nights}'
+                        f'\n  missed_intervals={self.missed_intervals}')
+            logger.info(f"Number of candidates: {len(self.candidates)}")
+            logger.info(f"Number of nights: {self.night_count}")
+        return len(self.candidates), self.night_count
+

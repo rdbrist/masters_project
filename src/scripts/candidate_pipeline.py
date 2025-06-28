@@ -5,9 +5,8 @@ from src.configurations import Configuration, FifteenMinute
 from src.helper import separate_flat_file, filter_separated_by_ids
 from src.candidate_selection import (remove_null_variable_individuals,
                                      get_all_individuals_night_stats,
-                                     plot_nights_vs_avg_intervals,
-                                     reconsolidate_flat_file_from_nights)
-from src.nights import Nights
+                                     plot_nights_vs_avg_intervals)
+from src.nights import Nights, consolidate_df_from_nights
 from src.data_processing.read_preprocessed_df import (apply_and_filter_by_offsets,
                                                       ReadPreprocessedDataFrame)
 from src.resample import resample_to_30_minute_intervals
@@ -66,7 +65,7 @@ def main():
         logger.info(f'Candidate: {id_}, Complete Nights: '
                     f'{nights.overall_stats["complete_nights"]}')
 
-    df_all_selected = reconsolidate_flat_file_from_nights(nights_objects)
+    df_all_selected = consolidate_df_from_nights(nights_objects)
     
     for zip_id in candidates:
         plot_night_means_for_individual(df_all_selected, zip_id,

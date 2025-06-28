@@ -1,6 +1,6 @@
 from datetime import time, datetime
 from typing import List, Tuple
-
+from loguru import logger
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -151,8 +151,9 @@ class Nights:
         """
         count_of_nights = len(self.nights)
         if not self.stats_per_night:
-            return print(f'No stats per night have been calculated for '
+            logger.info(f'No stats per night have been calculated for '
                          f'{self.zip_id}. Returning no output.')
+            return
 
         bg_sd_values = [d['bg_sd'] for d in self.stats_per_night if
                         pd.notna(d['bg_sd'])]
@@ -160,6 +161,8 @@ class Nights:
                            pd.notna(d['bg_range'])]
         bg_iqr_values = [d['bg_iqr'] for d in self.stats_per_night if
                          pd.notna(d['bg_iqr'])]
+        cob_nans = sum(d['cob_nans'] for d in self.stats_per_night)
+        iob_nans = sum(d['iob_nans'] for d in self.stats_per_night)
         return {
             'count_of_nights': count_of_nights,
             'complete_nights':
@@ -177,14 +180,14 @@ class Nights:
             'avg_num_breaks':
                 sum(d['num_breaks'] for d in
                     self.stats_per_night) / count_of_nights,
-            'avg_break_length':
-                sum(d['avg_break_length'] for d in
+            'avg_break_duration':
+                sum(d['avg_break_duration'] for d in
                     self.stats_per_night) / count_of_nights,
-            'avg_max_break_length':
-                sum(d['max_break_length'] for d in
+            'avg_max_break_duration':
+                sum(d['max_break_duration'] for d in
                     self.stats_per_night) / count_of_nights,
-            'avg_total_break_length':
-                sum(d['total_break_length'] for d in
+            'avg_total_break_duration':
+                sum(d['total_break_duration'] for d in
                     self.stats_per_night) / count_of_nights,
             'bg_sd_median':
                 np.nanmedian(bg_sd_values) if bg_sd_values else np.nan,
@@ -192,6 +195,12 @@ class Nights:
                 np.nanmedian(bg_range_values) if bg_range_values else np.nan,
             'bg_iqr_median':
                 np.nanmedian(bg_iqr_values) if bg_iqr_values else np.nan,
+            'total_cob_nans': cob_nans,
+            'total_iob_nans': iob_nans,
+            'cob_nan_ratio':
+                cob_nans / count_of_nights * self.total_intervals(),
+            'iob_nan_ratio':
+                iob_nans / count_of_nights * self.total_intervals(),
             'missed_interval_vectors':
                 [d['missed_interval_vector'] for d in self.stats_per_night],
         }
@@ -201,6 +210,17 @@ class Nights:
         Produces a dictionary of stats per night that can then be used for selection or further aggregation in overall stats.
         :return: List of dicts, one per night
         """
+
+        def max_run_of_ones(lst):  # For max run of missing intervals
+            max_run = current_run = 0
+            for val in lst:
+                if val == 1:
+                    current_run += 1
+                    max_run = max(max_run, current_run)
+                else:
+                    current_run = 0
+            return max_run
+
         stats = []
         for night_start_date, night_df in self.nights:
             if night_df.index[0].hour < self.night_start.hour:
@@ -221,34 +241,43 @@ class Nights:
             breaks = diffs[diffs > self.sample_rate]
             num_intervals = len(times)
             num_breaks = len(breaks)
-            avg_break_length = breaks.mean() if num_breaks > 0 else 0
-            max_break_length = breaks.max() if num_breaks > 0 else 0
-            total_break_length = breaks.sum() if num_breaks > 0 else 0
+            avg_break_duration = breaks.mean() if num_breaks > 0 else 0
+            max_break_duration = breaks.max() if num_breaks > 0 else 0
+            total_break_duration = breaks.sum() if num_breaks > 0 else 0
+
             if night_df['bg mean'].dtype != 'Float32':
                 print(self.zip_id)
             bg = night_df['bg mean'].astype(float)
             bg_night_mean = bg.mean()
+            cob_nans = night_df['cob mean'].isna().sum()
+            iob_nans = night_df['iob mean'].isna().sum()
             stats.append({
                 'night_date': date,
                 'num_intervals': num_intervals,
                 'missed_intervals': np.sum(vector),
                 'num_breaks': num_breaks,
-                'avg_break_length': avg_break_length,
-                'max_break_length': max_break_length,
-                'total_break_length': total_break_length,
+                'max_break_run': max_run_of_ones(vector),
+                'avg_break_duration': avg_break_duration,
+                'max_break_duration': max_break_duration,
+                'total_break_duration': total_break_duration,
                 'missed_interval_vector': vector.tolist(),
                 'bg_sd': bg.std(),
                 'bg_range': bg.max() - bg.min(),
                 'bg_mean': bg_night_mean,
                 'bg_iqr': bg.quantile(0.75) - bg.quantile(0.25),
-                'bg_zscore': (bg_night_mean - self.bg_mean) / self.bg_std
+                'bg_zscore': (bg_night_mean - self.bg_mean) / self.bg_std,
+                'cob_nans': cob_nans,
+                'iob_nans': iob_nans,
+                'cob_nan_ratio': cob_nans / num_intervals,
+                'iob_nan_ratio': iob_nans / num_intervals,
             })
 
         return stats
 
     def remove_incomplete_nights(self):
         """
-        Removes nights that have missing intervals, i.e. where the number of missed intervals is greater than 0.
+        Removes nights that have missing intervals, i.e. where the number of
+        missed intervals is greater than 0.
         :return: self with incomplete nights removed
         """
         self.stats_per_night = [s for s in self.stats_per_night if
@@ -264,29 +293,32 @@ class Nights:
 
     def plot_break_distribution(self):
         """
-        Plots the total break length per night as bars (left axis) and the number of breaks as a line (right axis),
-        sorted by total break length (ascending).
+        Plots the total break length per night as bars (left axis) and the
+        number of breaks as a line (right axis), sorted by total break length
+        (ascending).
         """
         if not self.stats_per_night:
             print("No stats to plot.")
             return
 
         # Extract and sort by total break length
-        stats = sorted(self.stats_per_night, key=lambda d: d["total_break_length"])
-        total_break_length = [d["total_break_length"] for d in stats]
+        stats = sorted(self.stats_per_night, key=lambda d: d["total_break_duration"])
+        total_break_duration = [d["total_break_duration"] for d in stats]
         num_breaks = [d["num_breaks"] for d in stats]
 
         fig, ax1 = plt.subplots(figsize=(10, 5))
 
         # Bar plot for total break length (left y-axis)
-        ax1.bar(range(len(total_break_length)), total_break_length, color='skyblue', label='Total Break Length')
+        ax1.bar(range(len(total_break_duration)), total_break_duration,
+                color='skyblue', label='Total Break Length')
         ax1.set_xlabel('Night (sorted by total break length)')
         ax1.set_ylabel('Total Break Length (minutes)', color='skyblue')
         ax1.tick_params(axis='y', labelcolor='skyblue')
 
         # Line plot for number of breaks (right y-axis)
         ax2 = ax1.twinx()
-        ax2.plot(range(len(num_breaks)), num_breaks, color='orange', marker='o', label='Number of Breaks')
+        ax2.plot(range(len(num_breaks)), num_breaks, color='orange',
+                 marker='o', label='Number of Breaks')
         ax2.set_ylabel('Number of Breaks', color='orange')
         ax2.tick_params(axis='y', labelcolor='orange')
 
@@ -305,7 +337,8 @@ class Nights:
             return
 
         num_breaks = [d["num_breaks"] for d in self.stats_per_night]
-        total_break_length = [d["total_break_length"] for d in self.stats_per_night]
+        total_break_duration =\
+            [d["total_break_duration"] for d in self.stats_per_night]
 
         # Plot histogram for number of breaks
         plt.figure(figsize=(8, 4))
@@ -318,7 +351,7 @@ class Nights:
 
         # Plot histogram for total break length
         plt.figure(figsize=(8, 4))
-        plt.hist(total_break_length, bins=bins, color='orange', alpha=0.8)
+        plt.hist(total_break_duration, bins=bins, color='orange', alpha=0.8)
         plt.xlabel('Total Break Length (minutes)')
         plt.ylabel('Count (Nights)')
         plt.title('Histogram of Total Break Lengths per Night')
@@ -327,17 +360,19 @@ class Nights:
 
     def plot_breaks_scatter(self):
         """
-        Plots a scatter plot of number of breaks (x-axis) vs total break length (y-axis) per night.
+        Plots a scatter plot of number of breaks (x-axis) vs total break length
+        (y-axis) per night.
         """
         if not self.stats_per_night:
             print("No stats to plot.")
             return
 
         num_breaks = [d["num_breaks"] for d in self.stats_per_night]
-        total_break_length = [d["total_break_length"] for d in self.stats_per_night]
+        total_break_duration = \
+            [d["total_break_duration"] for d in self.stats_per_night]
 
         plt.figure(figsize=(8, 5))
-        plt.scatter(num_breaks, total_break_length, color='purple', alpha=0.7)
+        plt.scatter(num_breaks, total_break_duration, color='purple', alpha=0.7)
         plt.xlabel('Number of Breaks')
         plt.ylabel('Total Break Length (minutes)')
         plt.title('Scatter Plot of Breaks vs Total Break Length per Night')
@@ -396,26 +431,37 @@ class Nights:
 
         # Custom legend
         legend_handles = [
-            Patch(facecolor='white', edgecolor='#cccccc', linewidth=1.5, label='Present'),
-            Patch(facecolor='#add8e6', edgecolor='#cccccc', linewidth=1.5, label='Missing')
+            Patch(facecolor='white', edgecolor='#cccccc',
+                  linewidth=1.5, label='Present'),
+            Patch(facecolor='#add8e6', edgecolor='#cccccc',
+                  linewidth=1.5, label='Missing')
         ]
         plt.legend(handles=legend_handles, loc='upper right', frameon=True)
 
         plt.tight_layout()
         plt.show()
 
-def filter_nights(nights: Nights, missed_intervals: int) \
-        -> List[Tuple[datetime.date, pd.DataFrame]]:
+def filter_nights(nights: Nights, missed_intervals: int,
+                  max_break_run: float,
+                  cob_nan_min: float,
+                  iob_nan_min: float) -> (
+        List[Tuple[datetime.date, pd.DataFrame]]):
     """
     Returns a list of only the nights within the number of missing intervals
     provided.
     intervals.
     :param nights: Nights object
     :param missed_intervals: Number of nights intervals missing to filter by
+    :param max_break_run: Maximum string of missing intervals
+    :param cob_nan_min: Minimum percentage of COB NaN allowed
+    :param iob_nan_min: Minimum percentage of IOB NaN allowed
     :return: List of objects with shape (id, [night_df, ...])
     """
     night_dates = [s['night_date'] for s in nights.stats_per_night
-                   if s['missed_intervals'] <= missed_intervals]
+                   if s['missed_intervals'] <= missed_intervals and
+                   s['max_break_run'] <= max_break_run and
+                   s['cob_nan_ratio'] <= cob_nan_min and
+                   s['iob_nan_ratio'] <= iob_nan_min]
     filtered_nights = [
         (night_date, night_df) for night_date, night_df in nights.nights
         if night_date in night_dates]
@@ -435,3 +481,25 @@ def nights_with_missed_intervals(
     return [nights for nights in nights_objects if
             any(s['missed_intervals'] <= missed_intervals
                 for s in nights.stats_per_night)]
+
+
+def consolidate_df_from_nights(
+        nights_objects: List[Nights]) -> pd.DataFrame:
+    """
+    Reconstructs a flat file from the list of Nights objects in the common
+    format, with a multi-index of id and datetime.
+    :param nights_objects: List of Nights objects
+    :return: DataFrame with the reconstructed flat file
+    """
+    consolidated_df = pd.DataFrame()
+    for nights in nights_objects:
+        for night_start_date, night_df in nights.nights:
+            # Ensure the index is a DatetimeIndex
+            if not isinstance(night_df.index, pd.DatetimeIndex):
+                raise ValueError("Night DataFrame index must be a "
+                                 "DatetimeIndex.")
+            df = night_df.copy()
+            df['id'] = nights.zip_id
+            df = df.reset_index().set_index(['id', 'datetime'])
+            consolidated_df = pd.concat([consolidated_df, df])
+    return consolidated_df

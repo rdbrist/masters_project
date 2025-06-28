@@ -7,9 +7,8 @@ from datetime import timedelta
 from loguru import logger
 
 from src.candidate_selection import remove_null_variable_individuals, \
-    get_all_individuals_night_stats, reconsolidate_flat_file_from_nights, \
-    plot_nights_vs_avg_intervals
-from src.nights import Nights
+    get_all_individuals_night_stats, plot_nights_vs_avg_intervals
+from src.nights import Nights, consolidate_df_from_nights
 from src.configurations import Configuration, Irregular, ThirtyMinute, \
     FifteenMinute
 from src.data_analysis import nans_per_column
@@ -144,7 +143,7 @@ def main():
         logger.info(f'Candidate: {id_}, Complete Nights: '
                     f'{nights.overall_stats["complete_nights"]}')
 
-    df_all_selected = reconsolidate_flat_file_from_nights(nights_objects)
+    df_all_selected = consolidate_df_from_nights(nights_objects)
     final_csv = INTERIM_DATA_DIR / config.final_filtered_csv
     df_all_selected.to_csv(final_csv)
 

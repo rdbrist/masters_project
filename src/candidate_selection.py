@@ -1,7 +1,5 @@
 import pandas as pd
-import numpy as np
 from loguru import logger
-from typing import Tuple, List
 from matplotlib import pyplot as plt
 from datetime import time
 
@@ -10,11 +8,13 @@ from src.config import FIGURES_DIR
 from src.nights import Nights
 
 
-def remove_null_variable_individuals(df: pd.DataFrame) -> pd.DataFrame:
+def remove_null_variable_individuals(df: pd.DataFrame,
+                                     logging: bool=False) -> pd.DataFrame:
     """
     Removes people from the dataset that have null or zero values for any
     IOB, COB or BG variable across their dataset.
-    :param df: Dataframe to process
+    :param df: (pd.Dataframe) Dataframe to process
+    :param logging: (bool) Whether to log the ids of individuals removed
     :return: Dataframe with individuals removed
     """
     df = check_df_index(df)
@@ -29,8 +29,9 @@ def remove_null_variable_individuals(df: pd.DataFrame) -> pd.DataFrame:
     ids = set()
     for key, val in ids_with_only_nans_or_zeros.items():
         ids.update(set(val))
-    logger.info(f'Following individuals have one or more variables missing: '
-                f'{ids}')
+    if logging:
+        logger.info(f'Following individuals have one or more variables missing:'
+                    f' {ids}')
     return df[~df.index.get_level_values('id').isin(ids)]
 
 def get_all_individuals_night_stats(separated: (int, pd.DataFrame)=None,
@@ -60,7 +61,7 @@ def provide_data_statistics(night_objects: [Nights]=None) -> pd.DataFrame:
         the time series data for an individual
     :return: Dataframe with the statistics calculated for individuals
     """
-    if night_objects is None:
+    if night_objects is None or night_objects == []:
         raise TypeError('night_objects cannot be None')
     overall_stats_list = []
     for nights in night_objects:
@@ -141,23 +142,3 @@ def plot_nights_vs_avg_intervals(df_overall_stats: pd.DataFrame):
     plt.show()
 
 
-def reconsolidate_flat_file_from_nights(
-        nights_objects: List[Nights]) -> pd.DataFrame:
-    """
-    Reconstructs a flat file from the list of Nights objects in the common
-    format, with a multi-index of id and datetime.
-    :param nights_objects: List of Nights objects
-    :return: DataFrame with the reconstructed flat file
-    """
-    flat_file = pd.DataFrame()
-    for nights in nights_objects:
-        for night_start_date, night_df in nights.nights:
-            # Ensure the index is a DatetimeIndex
-            if not isinstance(night_df.index, pd.DatetimeIndex):
-                raise ValueError("Night DataFrame index must be a "
-                                 "DatetimeIndex.")
-            df = night_df.copy()
-            df['id'] = nights.zip_id
-            df = df.reset_index().set_index(['id', 'datetime'])
-            flat_file = pd.concat([flat_file, df])
-    return flat_file

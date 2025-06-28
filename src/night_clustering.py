@@ -11,7 +11,7 @@ from tsfresh.feature_extraction import ComprehensiveFCParameters, \
     EfficientFCParameters, MinimalFCParameters
 from tsfresh.utilities.dataframe_functions import impute
 
-from src.helper import check_df_index
+from src.helper import check_df_index, obfuscate_ids
 from src.config import FIGURES_DIR
 
 
@@ -30,7 +30,6 @@ class NightClustering:
 
         self.df = df.copy()
         self.variable_cols = [col for col in df.columns if col not in ['id', 'datetime']]
-        print(self.variable_cols)
         self.customised_feature_dict = None
         self.feature_settings = self._get_feature_settings(feature_settings)
         self.night_start_hour = 17  # Default night start hour
@@ -40,7 +39,6 @@ class NightClustering:
         self.night_clusters = None
         self.rolling_features_df = None
         self.silhouette_score = None
-
 
         # Store scalers and PCA models
         self.scaler = None
@@ -197,8 +195,11 @@ class NightClustering:
 
         if n_components is not None:
             self.pca_model = PCA(n_components=n_components)
-            self.night_pca_components = self.pca_model.fit_transform(self.scaled_night_features)
-            print(f"PCA reduced dimensions from {self.scaled_night_features.shape[1]} to {self.night_pca_components.shape[1]}.")
+            self.night_pca_components = (
+                self.pca_model.fit_transform(self.scaled_night_features))
+            print(f"PCA reduced dimensions from "
+                  f"{self.scaled_night_features.shape[1]} to "
+                  f"{self.night_pca_components.shape[1]}.")
             return self.night_pca_components
         else:
             return self.scaled_night_features
@@ -223,14 +224,16 @@ class NightClustering:
             raise ValueError("Features not preprocessed yet. Run p"
                              "reprocess_night_features first.")
 
-        data_for_clustering = self.night_pca_components if self.night_pca_components is not None else self.scaled_night_features.values
+        data_for_clustering = (
+            self.night_pca_components) if self.night_pca_components is not None \
+            else self.scaled_night_features.values
         if data_for_clustering.shape[0] < n_clusters:
              raise ValueError(
                  f"Number of nights ({data_for_clustering.shape[0]}) is less "
                  f"than n_clusters ({n_clusters}). Cannot cluster.")
 
         print(f"Clustering nights into {n_clusters} clusters...")
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10) # n_init for robustness
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
         self.night_clusters = kmeans.fit_predict(data_for_clustering)
 
         self.night_features_df['cluster_label'] = self.night_clusters
@@ -243,8 +246,9 @@ class NightClustering:
 
         if (plot_2d and self.night_pca_components is not None
                 and self.night_pca_components.shape[1] >= 2):
-            id_list = (pd.Categorical(self.reindex_night_features()['id']).
-                       codes.astype(int) + 1000)
+            id_list = (obfuscate_ids(self.reindex_night_features().
+                                     reset_index()['id']))
+            print(type(id_list))
 
             # Build DataFrame for plotting
             plot_df = pd.DataFrame({
@@ -253,14 +257,14 @@ class NightClustering:
                 'cluster_label': self.night_clusters,
                 'id': id_list
             })
-
+            style = 'id' if len(id_list) < 4 else None
             plt.figure(figsize=(8, 6))
             ax = sns.scatterplot(
                 data=plot_df,
                 x='PC1',
                 y='PC2',
                 hue='cluster_label',
-                style='id',
+                style=style,
                 palette='viridis',
                 alpha=0.7
             )
@@ -320,7 +324,6 @@ class NightClustering:
 
         return original_features_df.groupby('cluster_label').mean()
 
-
     def silhouette_analysis(self, cluster_range: range) -> list:
         """
         Perform silhouette analysis for a range of cluster numbers.
@@ -357,7 +360,7 @@ class NightClustering:
         temp_df[['id', 'date']] = temp_df['index'].str.split('_', expand=True)
         temp_df['date'] = pd.to_datetime(temp_df['date'])
         temp_df['id'] = temp_df['id'].astype(int)
-        temp_df.drop('index', axis=1).set_index(['id', 'date'], inplace=True)
+        temp_df = temp_df.drop('index', axis=1).set_index(['id', 'date'])
 
         return temp_df
 
@@ -378,7 +381,7 @@ class NightClustering:
             raise ValueError("Night features not extracted yet. Run "
                              "extract_night_level_features first.")
 
-        temp = self.reindex_night_features()
+        temp = self.reindex_night_features().reset_index()
         temp = (temp[['id', 'date', 'cluster_label']].
                 rename(columns={'date': 'night_start_date'}).
                 set_index(['id', 'night_start_date'])
