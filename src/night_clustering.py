@@ -4,6 +4,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 from tsfresh import extract_features
@@ -39,6 +40,7 @@ class NightClustering:
         self.night_clusters = None
         self.rolling_features_df = None
         self.silhouette_score = None
+        self.tsne_results = None
 
         # Store scalers and PCA models
         self.scaler = None
@@ -172,17 +174,21 @@ class NightClustering:
     def preprocess_night_features(self, n_components=0.95):
         """
         Scales features and applies PCA for dimensionality reduction.
-        :param n_components: (float or int), number of PCA components or variance explained (0-1.0).
+        :param n_components: (float or int), number of PCA components or
+        variance explained (0-1.0).
         """
         if self.night_features_df is None:
-            raise ValueError("Night features not extracted yet. Run extract_night_level_features first.")
+            raise ValueError("Night features not extracted yet. Run "
+                             "extract_night_level_features first.")
 
         print("Preprocessing night-level features (scaling and PCA)...")
 
-        # Handle NaNs from tsfresh. Use impute again to catch any new NaNs from feature extraction.
+        # Handle NaNs from tsfresh. Use impute again to catch any new NaNs from
+        # feature extraction.
         X_imputed = impute(self.night_features_df.copy())
 
-        # Drop columns with zero variance after imputation (can cause issues with StandardScaler)
+        # Drop columns with zero variance after imputation (can cause issues
+        # with StandardScaler)
         X_imputed = X_imputed.loc[:, X_imputed.var() != 0]
 
         self.scaler = StandardScaler()
@@ -207,26 +213,27 @@ class NightClustering:
     def plot_pca_cumulative_variance(self):
         """ Plots the cumulative explained variance ratio from PCA. """
         plt.plot(np.cumsum(self.pca_model.explained_variance_ratio_))
-        plt.xlabel('number of components')
-        plt.ylabel('cumulative explained variance')
+        plt.title('Cumulative Explained Variance by PCA Components')
+        plt.xlabel('Number of components')
+        plt.ylabel('Cumulative explained variance')
         plt.show()
 
     def cluster_nights(self, n_clusters: int=3, print_clusters: bool=True,
                        plot_2d: bool=True):
         """
         Clusters the nights using K-Means.
-        :param print_clusters: bool, Whether to print cluster distribution.
+        :param print_clusters: (bool), Whether to print cluster distribution.
         :param n_clusters: (int), Number of clusters for K-Means.
         :param plot_2d: (bool), Whether to plot 2D PCA for clusters.
         """
         if (self.night_pca_components is None and
                 self.scaled_night_features is None):
-            raise ValueError("Features not preprocessed yet. Run p"
-                             "reprocess_night_features first.")
+            raise ValueError("Features not preprocessed yet. Run "
+                             "preprocess_night_features first.")
 
         data_for_clustering = (
-            self.night_pca_components) if self.night_pca_components is not None \
-            else self.scaled_night_features.values
+            self.night_pca_components if self.night_pca_components is not None
+            else self.scaled_night_features.values)
         if data_for_clustering.shape[0] < n_clusters:
              raise ValueError(
                  f"Number of nights ({data_for_clustering.shape[0]}) is less "
@@ -248,8 +255,6 @@ class NightClustering:
                 and self.night_pca_components.shape[1] >= 2):
             id_list = (obfuscate_ids(self.reindex_night_features().
                                      reset_index()['id']))
-            print(type(id_list))
-
             # Build DataFrame for plotting
             plot_df = pd.DataFrame({
                 'PC1': self.night_pca_components[:, 0],
@@ -286,17 +291,21 @@ class NightClustering:
                                 title='Cluster', loc='upper right')
             ax.add_artist(legend1)
 
+
             # ID legend
-            unique_ids = plot_df['id'].unique()
-            id_handles = []
-            id_labels = []
-            for i in unique_ids:
-                idx = labels1.index(str(i)) if str(
-                    i) in labels1 else labels1.index(int(i))
-                id_handles.append(handles1[idx])
-                id_labels.append(f'ID {i}')
-            legend2 = ax.legend(id_handles, id_labels, title='ID',
-                                loc='lower right')
+            if len(id_list) < 4:
+                unique_ids = plot_df['id'].unique()
+                id_handles = []
+                id_labels = []
+                for i in unique_ids:
+                    print(i)
+                    print(labels1)
+                    idx = labels1.index(str(i)) if str(
+                        i) in labels1 else labels1.index(int(i))
+                    id_handles.append(handles1[idx])
+                    id_labels.append(f'ID {i}')
+                legend2 = ax.legend(id_handles, id_labels, title='ID',
+                                    loc='lower right')
 
             plt.title('Nights Clustered (KMeans)')
             plt.xlabel('Principal Component 1')
@@ -304,15 +313,22 @@ class NightClustering:
             plt.savefig(FIGURES_DIR / 'clustered_nights_pca.png', dpi=400,
                         bbox_inches='tight')
             plt.show()
-        elif plot_2d and (self.night_pca_components is None or self.night_pca_components.shape[1] < 2):
-            print("Cannot plot 2D PCA: PCA not performed or less than 2 components.")
+        elif (plot_2d and
+              (self.night_pca_components is None
+               or self.night_pca_components.shape[1] < 2)):
+            print("Cannot plot 2D PCA: PCA not performed or less than 2 "
+                  "components.")
 
         return self.night_clusters
 
     def get_cluster_centroids(self):
-        """Returns the mean feature values for each cluster (in original feature space)."""
+        """
+        Returns the mean feature values for each cluster (in original feature
+        space).
+        """
         if self.night_clusters is None:
-            raise ValueError("Nights not clustered yet. Run cluster_nights first.")
+            raise ValueError("Nights not clustered yet. Run cluster_nights "
+                             "first.")
 
         # Inverse transform scaled features before averaging for interpretability
         original_features_df = pd.DataFrame(
@@ -443,4 +459,65 @@ class NightClustering:
         plt.title('Cluster Centroids: Feature Means')
         plt.xlabel('Cluster', verticalalignment='top')
         plt.ylabel('Feature')
+        plt.show()
+
+    def fit_tsne(self, perplexity=30, max_iter=1000, random_state=42):
+        """
+        Fits t-SNE to the night-level features.
+        :param perplexity: (int), Perplexity parameter for t-SNE.
+        :param max_iter: (int), Maximum number of iterations for t-SNE.
+        :param random_state: (int), Random state for reproducibility.
+        :return: t-SNE results as a 2D array.
+        """
+        if self.night_features_df is None:
+            raise ValueError("Night features not extracted yet. Run "
+                             "extract_night_level_features first.")
+
+        features = self.night_features_df.drop(columns=['cluster_label'])
+        features_scaled = StandardScaler().fit_transform(features)
+
+        tsne = TSNE(n_components=2, perplexity=perplexity, max_iter=max_iter,
+                    random_state=random_state)
+        self.tsne_results = tsne.fit_transform(features_scaled)
+
+        return self.tsne_results
+
+    def clustering_tsne(self):
+        """
+        Clusters the t-SNE results using KMeans and adds cluster labels to the
+        night features DataFrame.
+        """
+        if self.tsne_results is None:
+            raise ValueError("t-SNE results not computed yet. Run fit_tsne "
+                             "first.")
+
+        # Perform KMeans clustering on t-SNE results
+        n_clusters = len(set(self.night_clusters))  # use the same number
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+        tsne_clusters = kmeans.fit_predict(self.tsne_results)
+        self.night_features_df['tsne_cluster_label'] = tsne_clusters
+        self.tsne_clusters = tsne_clusters
+
+    def plot_tsne(self, cluster_type='kmeans'):
+        """
+        Plots a t-SNE visualisation of the night-level features, coloured by
+        cluster label. Provides the option to use either KMeans clusters from
+        original KMeans clustering or t-SNE clusters.
+        :param cluster_type: (str), Type of clustering to plot.
+        """
+        if self.tsne_results is None:
+            raise ValueError("t-SNE results not computed yet. Run fit_tsne "
+                             "first.")
+
+        clusters = (self.night_clusters if cluster_type == 'kmeans'
+                    else self.tsne_clusters)
+
+        plt.figure(figsize=(8, 6))
+        sns.scatterplot(x=self.tsne_results[:, 0], y=self.tsne_results[:, 1],
+                        hue=clusters, palette='tab10', alpha=0.7)
+        plt.title('t-SNE Visualization of Night Features by KMeans Cluster')
+        plt.xlabel('t-SNE 1')
+        plt.ylabel('t-SNE 2')
+        plt.legend(title='Cluster', bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.tight_layout()
         plt.show()
