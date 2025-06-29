@@ -8,7 +8,7 @@ import pandas as pd
 from src.config import MODELS_DIR, PROCESSED_DATA_DIR
 from src.configurations import Configuration
 from src.hmm import HMMEventDetector
-from src.clustering import Clustering_EventDetector
+
 
 app = typer.Typer()
 
@@ -36,8 +36,7 @@ def main(
 
             # --- HMM Event Detection ---
             print("\n--- HMM Event Detection Example ---")
-            hmm_detector = HMMEventDetector(df, feature_cols,
-                                             original_var_cols)
+            hmm_detector = HMMEventDetector(df, feature_cols, original_var_cols)
             hmm_detector.train_model(n_components=3)
 
             # Visualize for a specific individual

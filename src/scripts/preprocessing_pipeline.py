@@ -1,16 +1,13 @@
 import datetime
 import time
 import pandas as pd
-import os
-from pathlib import Path
 from datetime import timedelta
 from loguru import logger
 
 from src.candidate_selection import remove_null_variable_individuals, \
     get_all_individuals_night_stats, plot_nights_vs_avg_intervals
 from src.nights import Nights, consolidate_df_from_nights
-from src.configurations import Configuration, Irregular, ThirtyMinute, \
-    FifteenMinute
+from src.configurations import Configuration, Irregular, ThirtyMinute
 from src.data_analysis import nans_per_column
 from src.data_processing.read import (read_all_device_status,
                                       get_all_offsets_df_from_profiles)
@@ -33,7 +30,7 @@ def main():
     night_hour = 17
     morning_hour = 11
     night_start = datetime.time(night_hour, 0)  # 5 PM
-    morning_end = datetime.time(morning_hour, 0) # 11 AM
+    morning_end = datetime.time(morning_hour, 0)  # 11 AM
     resampled_parquet_file = (INTERIM_DATA_DIR /
                               sampling.file_name('parquet'))
 
@@ -119,10 +116,11 @@ def main():
     separated = separate_flat_file(df_processed)
 
     # 3. Process the data through the Nights class
-    df_overall_stats = get_all_individuals_night_stats(separated,
-                                               sample_rate=sampling.minutes,
-                                               night_start=night_start,
-                                               morning_end=morning_end)
+    df_overall_stats = (
+        get_all_individuals_night_stats(separated,
+                                        sample_rate=sampling.minutes,
+                                        night_start=night_start,
+                                        morning_end=morning_end))
 
     # 4. Aggregate stats and visualise the data
     plot_nights_vs_avg_intervals(df_overall_stats)

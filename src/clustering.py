@@ -282,4 +282,3 @@ def generate_dummy_data(num_individuals=5, num_night_clusters=3):
                 'night_cluster_label': night_cluster_label
             })
     return pd.DataFrame(data)
-

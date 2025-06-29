@@ -1,8 +1,11 @@
 import pytest
 import pandas as pd
 import numpy as np
+from datetime import datetime
 from src.time_series_analysis import (split_on_time_gaps,
                                       remove_zero_or_null_days)
+from src.helper import get_night_start_date
+
 
 def test_split_on_time_gaps():
     idx = pd.date_range(start='2023-01-01', periods=6, freq='D')
@@ -43,3 +46,59 @@ def test_remove_zero_or_null_days():
                                            freq='D'))
     result3 = remove_zero_or_null_days(df3, 'value')
     assert result3.empty
+
+def test_get_night_start_date_basic_usage():
+    dates = pd.to_datetime([
+        '2025-06-29 18:00',
+        '2025-06-29 03:00',
+        '2025-06-29 23:59',
+        '2025-06-30 01:00',
+    ])
+    result = get_night_start_date(dates, night_start_hour=17)
+    assert result[0] == datetime(2025, 6, 29).date()
+    assert result[1] == datetime(2025, 6, 28).date()
+    assert result[2] == datetime(2025, 6, 29).date()
+    assert result[3] == datetime(2025, 6, 29).date()
+
+def test_get_night_start_date_with_numpy_array():
+    arr = np.array(['2025-06-29 18:00', '2025-06-29 03:00'])
+    result = get_night_start_date(arr, night_start_hour=17)
+    assert result.iloc[0] == datetime(2025, 6, 29).date()
+    assert result.iloc[1] == datetime(2025, 6, 28).date()
+
+def test_get_night_start_date_with_list():
+    lst = ['2025-06-29 18:00', '2025-06-29 03:00']
+    result = get_night_start_date(lst, night_start_hour=17)
+    assert result.iloc[0] == datetime(2025, 6, 29).date()
+    assert result.iloc[1] == datetime(2025, 6, 28).date()
+
+def test_get_night_start_date_with_pandas_series():
+    ser = pd.Series(pd.to_datetime(['2025-06-29 18:00', '2025-06-29 03:00']))
+    result = get_night_start_date(ser, night_start_hour=17)
+    assert result.iloc[0] == datetime(2025, 6, 29).date()
+    assert result.iloc[1] == datetime(2025, 6, 28).date()
+
+def test_get_night_start_date_edge_cases():
+    # Midnight boundary
+    dates = pd.to_datetime(['2025-06-29 00:00', '2025-06-29 16:59', '2025-06-29 17:00'])
+    result = get_night_start_date(dates, night_start_hour=17)
+    assert result[0] == datetime(2025, 6, 28).date()
+    assert result[1] == datetime(2025, 6, 28).date()
+    assert result[2] == datetime(2025, 6, 29).date()
+
+def test_get_night_start_date_invalid_inputs():
+    with pytest.raises(ValueError):
+        get_night_start_date(None, night_start_hour=17)
+    with pytest.raises(ValueError):
+        get_night_start_date(pd.Series([1,2,3]), night_start_hour=None)
+    with pytest.raises(ValueError):
+        get_night_start_date(123, night_start_hour=17)
+
+def test_get_night_start_date_different_night_start_hours():
+    dates = pd.to_datetime(['2025-06-29 06:00', '2025-06-29 20:00'])
+    result = get_night_start_date(dates, night_start_hour=6)
+    assert result[0] == datetime(2025, 6, 29).date()
+    assert result[1] == datetime(2025, 6, 29).date()
+    result2 = get_night_start_date(dates, night_start_hour=20)
+    assert result2[0] == datetime(2025, 6, 28).date()
+    assert result2[1] == datetime(2025, 6, 29).date()

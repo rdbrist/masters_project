@@ -12,7 +12,7 @@ from tsfresh.feature_extraction import ComprehensiveFCParameters, \
     EfficientFCParameters, MinimalFCParameters
 from tsfresh.utilities.dataframe_functions import impute
 
-from src.helper import check_df_index, obfuscate_ids
+from src.helper import check_df_index, get_night_start_date
 from src.config import FIGURES_DIR
 
 
@@ -21,23 +21,29 @@ class NightClustering:
     Class uses feature-based clustering to identify patterns in night periods,
     using the tsfresh library for feature extraction.
     """
-    def __init__(self, df, feature_settings='custom'):
+    def __init__(self, df, feature_settings='custom', night_start_hour=None):
         """
-        Initialises the NightClustering with the preprocessed time series data. It is assumed the DataFrame has a MultiIndex with 'id' and 'datetime', of night periods with consistent and complete intervals between a consistent start and end time.
+        Initialises the NightClustering with the preprocessed time series data.
+        It is assumed the DataFrame has a MultiIndex with 'id' and 'datetime',
+        of night periods with consistent and complete intervals between a
+        consistent start and end time.
         :param df: Pandas DataFrame containing the time series data.
-        :param feature_settings: str, 'comprehensive', 'efficient', 'minimal', or 'custom'. Defines tsfresh feature extraction settings.
+        :param feature_settings: str, 'comprehensive', 'efficient', 'minimal',
+            or 'custom'. Defines tsfresh feature extraction settings.
         """
-        df = check_df_index(df)  # Ensure the DataFrame has a MultiIndex with 'id' and 'datetime'
+        df = check_df_index(df)
 
         self.df = df.copy()
-        self.variable_cols = [col for col in df.columns if col not in ['id', 'datetime']]
+        self.variable_cols = [col for col in df.columns if col not in
+                              ['id', 'datetime']]
         self.customised_feature_dict = None
         self.feature_settings = self._get_feature_settings(feature_settings)
-        self.night_start_hour = 17  # Default night start hour
+        self.night_start_hour = night_start_hour  # Default night start hour
         self.night_features_df = None
         self.scaled_night_features = None
         self.night_pca_components = None
         self.night_clusters = None
+        self.tsne_clusters = None
         self.rolling_features_df = None
         self.silhouette_score = None
         self.tsne_results = None
@@ -45,6 +51,25 @@ class NightClustering:
         # Store scalers and PCA models
         self.scaler = None
         self.pca_model = None
+
+    def get_unique_ids(self):
+        """
+        Returns a list of unique IDs from the DataFrame.
+        :return: List of unique IDs.
+        """
+        return self.df.index.get_level_values('id').unique().tolist()
+
+    def get_summary_statistics(self):
+        """
+        Returns summary statistics for the DataFrame.
+        :return: DataFrame with summary statistics.
+        """
+        df = self.df.copy().reset_index()
+        df['night_start_date'] = (
+            get_night_start_date(df['datetime'], self.night_start_hour))
+        return (df[['id', 'night_start_date']].
+                drop_duplicates().groupby('id').size().
+                reset_index(name='nights')).set_index('id')
 
     def _get_feature_settings(self, setting_name):
         """Helper to get tsfresh feature extraction settings."""
@@ -100,7 +125,8 @@ class NightClustering:
                     'count_below_mean': None,
                     'count_above': [{'t': 100}],
                     'count_below': [{'t': 50}],
-                    'change_quantiles': [{'ql': 0.2, 'qh': 0.8, 'isabs': True, 'f_agg': 'mean'}],
+                    'change_quantiles': [{'ql': 0.2, 'qh': 0.8, 'isabs': True,
+                                          'f_agg': 'mean'}],
                     'first_location_of_maximum': None,
                     'last_location_of_maximum': None,
                     'first_location_of_minimum': None,
@@ -137,25 +163,31 @@ class NightClustering:
             }
             return None
         else:
-            raise ValueError("Invalid feature_settings. Choose 'comprehensive', 'efficient', 'minimal', or 'custom'.")
+            raise ValueError("Invalid feature_settings. Choose "
+                             "'comprehensive', 'efficient', 'minimal', or "
+                             "'custom'.")
 
-    def extract_night_level_features(self, night_start_hour=19):
+    def extract_night_level_features(self):
         """
         Extracts aggregated tsfresh features for each complete night period.
-        The MultiIndex needs a unique 'night_id' for each night (e.g., id + night start date).
-        :param night_start_hour: (int), hour at which the night period starts (e.g., 19 for 19:00).
+        The MultiIndex needs a unique 'night_id' for each night (e.g., id +
+        night start date).
+        :param night_start_hour: (int), hour at which the night period starts
+            (e.g., 19 for 19:00).
         """
-        print(f"Extracting night-level features using {self.feature_settings.__class__.__name__} settings...")
         temp_df = self.df.reset_index()
-        hour = temp_df['datetime'].dt.hour
-        # Assign night to previous date if before night_start_hour
-        night_start_date = temp_df['datetime'].dt.date - pd.to_timedelta((hour < night_start_hour).astype(int), unit='D')
-        temp_df['night_id'] = temp_df['id'].astype(str) + '_' + night_start_date.astype(str)
+        night_start_date = (
+            get_night_start_date(temp_df['datetime'], self.night_start_hour))
+        temp_df['night_id'] = (
+                temp_df['id'].astype(str) + '_' + night_start_date.astype(str))
         column_kind, value_name = None, None
         if self.feature_settings is None:  # And therefore using custom features
             column_kind = 'kind'
             value_name = 'value'
-            temp_df = temp_df.melt(id_vars=['night_id', 'id', 'datetime'], value_vars=self.variable_cols, var_name=column_kind, value_name=value_name)
+            temp_df = temp_df.melt(id_vars=['night_id', 'id', 'datetime'],
+                                   value_vars=self.variable_cols,
+                                   var_name=column_kind,
+                                   value_name=value_name)
         self.night_features_df = extract_features(
             temp_df.drop(columns='id'),
             column_id='night_id',
@@ -168,7 +200,8 @@ class NightClustering:
             show_warnings=True
             )
 
-        print(f"Extracted {self.night_features_df.shape[1]} features for {self.night_features_df.shape[0]} nights.")
+        print(f"Extracted {self.night_features_df.shape[1]} features for "
+              f"{self.night_features_df.shape[0]} nights.")
         return self.night_features_df
 
     def preprocess_night_features(self, n_components=0.95):
@@ -183,12 +216,10 @@ class NightClustering:
 
         print("Preprocessing night-level features (scaling and PCA)...")
 
-        # Handle NaNs from tsfresh. Use impute again to catch any new NaNs from
-        # feature extraction.
+        # Handle NaNs from tsfresh features
         X_imputed = impute(self.night_features_df.copy())
 
-        # Drop columns with zero variance after imputation (can cause issues
-        # with StandardScaler)
+        # Drop columns with zero variance to avoid scaling issues
         X_imputed = X_imputed.loc[:, X_imputed.var() != 0]
 
         self.scaler = StandardScaler()
@@ -218,8 +249,8 @@ class NightClustering:
         plt.ylabel('Cumulative explained variance')
         plt.show()
 
-    def cluster_nights(self, n_clusters: int=3, print_clusters: bool=True,
-                       plot_2d: bool=True):
+    def cluster_nights(self, n_clusters: int = 3, print_clusters: bool = True,
+                       plot_2d: bool = True):
         """
         Clusters the nights using K-Means.
         :param print_clusters: (bool), Whether to print cluster distribution.
@@ -235,26 +266,23 @@ class NightClustering:
             self.night_pca_components if self.night_pca_components is not None
             else self.scaled_night_features.values)
         if data_for_clustering.shape[0] < n_clusters:
-             raise ValueError(
-                 f"Number of nights ({data_for_clustering.shape[0]}) is less "
-                 f"than n_clusters ({n_clusters}). Cannot cluster.")
+            raise ValueError(
+                f"Number of nights ({data_for_clustering.shape[0]}) is less "
+                f"than n_clusters ({n_clusters}). Cannot cluster.")
 
-        print(f"Clustering nights into {n_clusters} clusters...")
         kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
         self.night_clusters = kmeans.fit_predict(data_for_clustering)
 
-        self.night_features_df['cluster_label'] = self.night_clusters
         if print_clusters:
             print("Night cluster distribution:")
-            print(self.night_features_df['cluster_label'].value_counts())
+            print(np.unique(self.night_clusters, return_counts=True))
 
         self.silhouette_score = silhouette_score(data_for_clustering,
                                                  self.night_clusters)
 
         if (plot_2d and self.night_pca_components is not None
                 and self.night_pca_components.shape[1] >= 2):
-            id_list = (obfuscate_ids(self.reindex_night_features().
-                                     reset_index()['id']))
+            id_list = self.reindex_night_features().reset_index()['id']
             # Build DataFrame for plotting
             plot_df = pd.DataFrame({
                 'PC1': self.night_pca_components[:, 0],
@@ -262,50 +290,10 @@ class NightClustering:
                 'cluster_label': self.night_clusters,
                 'id': id_list
             })
-            style = 'id' if len(id_list) < 4 else None
+
             plt.figure(figsize=(8, 6))
-            ax = sns.scatterplot(
-                data=plot_df,
-                x='PC1',
-                y='PC2',
-                hue='cluster_label',
-                style=style,
-                palette='viridis',
-                alpha=0.7
-            )
-
-            # Remove the default legend
-            ax.legend_.remove()
-
-            # Cluster legend
-            handles1, labels1 = ax.get_legend_handles_labels()
-            unique_clusters = plot_df['cluster_label'].unique()
-            cluster_handles = []
-            cluster_labels = []
-            for c in sorted(unique_clusters):
-                idx = labels1.index(str(c)) if str(
-                    c) in labels1 else labels1.index(int(c))
-                cluster_handles.append(handles1[idx])
-                cluster_labels.append(f'Cluster {c}')
-            legend1 = ax.legend(cluster_handles, cluster_labels,
-                                title='Cluster', loc='upper right')
-            ax.add_artist(legend1)
-
-
-            # ID legend
-            if len(id_list) < 4:
-                unique_ids = plot_df['id'].unique()
-                id_handles = []
-                id_labels = []
-                for i in unique_ids:
-                    print(i)
-                    print(labels1)
-                    idx = labels1.index(str(i)) if str(
-                        i) in labels1 else labels1.index(int(i))
-                    id_handles.append(handles1[idx])
-                    id_labels.append(f'ID {i}')
-                legend2 = ax.legend(id_handles, id_labels, title='ID',
-                                    loc='lower right')
+            sns.scatterplot(data=plot_df, x='PC1', y='PC2', hue='cluster_label',
+                            palette='viridis', alpha=0.7)
 
             plt.title('Nights Clustered (KMeans)')
             plt.xlabel('Principal Component 1')
@@ -330,7 +318,7 @@ class NightClustering:
             raise ValueError("Nights not clustered yet. Run cluster_nights "
                              "first.")
 
-        # Inverse transform scaled features before averaging for interpretability
+        # Inverse scaled features before averaging for interpretability
         original_features_df = pd.DataFrame(
             self.scaler.inverse_transform(self.scaled_night_features),
             columns=self.scaled_night_features.columns,
@@ -340,25 +328,36 @@ class NightClustering:
 
         return original_features_df.groupby('cluster_label').mean()
 
-    def silhouette_analysis(self, cluster_range: range) -> list:
+    def silhouette_analysis(self, cluster_range: range,
+                            cluster_type: str = 'kmeans',
+                            plot_results: bool = True,
+                            **kwargs) -> list:
         """
         Perform silhouette analysis for a range of cluster numbers.
-        :param cluster_range: Range of cluster numbers to evaluate.
-        :return: List of silhouette scores for each cluster number.
+        :param cluster_range: (range) Range of cluster numbers to evaluate
+        :param cluster_type: (str), Type of clustering to use for silhouette
+            analysis, currently only 'kmeans' is supported
+        :param plot_results: (bool) Whether to plot the silhouette scores
+        :return: List of silhouette scores for each cluster number
         """
         silhouette_scores = []
         for n_clusters in cluster_range:
-            self.cluster_nights(n_clusters=n_clusters,
-                                print_clusters=False,
-                                plot_2d=False)
+            if cluster_type == 'kmeans':
+                self.cluster_nights(n_clusters=n_clusters,
+                                    print_clusters=False,
+                                    plot_2d=False)
+            elif cluster_type == 'tsne':
+                self.fit_tsne(**kwargs)
+                self.clustering_tsne(n_clusters=n_clusters)
             silhouette_scores.append(self.silhouette_score)
 
-        plt.plot(cluster_range, silhouette_scores)
-        plt.title('Silhouette Analysis')
-        plt.xlabel('Number of clusters')
-        plt.ylabel('Silhouette Score')
-        plt.xticks(cluster_range)
-        plt.show()
+        if plot_results:
+            plt.plot(cluster_range, silhouette_scores)
+            plt.title('Silhouette Analysis')
+            plt.xlabel('Number of clusters')
+            plt.ylabel('Silhouette Score')
+            plt.xticks(cluster_range)
+            plt.show()
 
         return silhouette_scores
 
@@ -372,17 +371,19 @@ class NightClustering:
             raise ValueError("Night features not extracted yet. "
                              "Run extract_night_level_features first.")
 
-        temp_df = self.night_features_df.reset_index().copy()
-        temp_df[['id', 'date']] = temp_df['index'].str.split('_', expand=True)
-        temp_df['date'] = pd.to_datetime(temp_df['date'])
-        temp_df['id'] = temp_df['id'].astype(int)
-        temp_df = temp_df.drop('index', axis=1).set_index(['id', 'date'])
+        df = self.night_features_df.reset_index().copy()
+        df[['id', 'date']] = df['index'].str.split('_', expand=True)
+        df['date'] = pd.to_datetime(df['date'])
+        df['id'] = df['id'].astype(int)
+        df = df.drop('index', axis=1).set_index(['id', 'date'])
 
-        return temp_df
+        return df
 
     def return_dataset_with_clusters(self, df: pd.DataFrame = None):
         """
-        Returns the original dataset with the cluster labels added.
+        Returns the original dataset with the cluster labels added. Adds
+        clusters from both the original KMeans clustering and the t-SNE if
+        this has been performed, and also the start date of the night.
         :param df: (pd.DataFrame), Optional DataFrame to use instead of self.df.
                    If None, uses the original DataFrame passed during
                    initialisation. DataFrame should have a MultiIndex ['id',
@@ -398,37 +399,38 @@ class NightClustering:
                              "extract_night_level_features first.")
 
         temp = self.reindex_night_features().reset_index()
-        temp = (temp[['id', 'date', 'cluster_label']].
-                rename(columns={'date': 'night_start_date'}).
-                set_index(['id', 'night_start_date'])
-                )
+        cols = ['id', 'date', 'cluster_label']
+        temp['cluster_label'] = self.night_clusters
 
-        df_clustered = df.reset_index().copy()
-        hour = df_clustered['datetime'].dt.hour
-        df_clustered['night_start_date'] = (
-                    df_clustered['datetime'] - pd.to_timedelta(
-                (hour < self.night_start_hour).astype(int), unit='D')).dt.floor(
-            'D')  # to enable alignment of dtypes as datetime64[ns] as a date
-        # print(df_clustered.dtypes)
-        df_clustered = df_clustered.reset_index().set_index(
-            ['id', 'night_start_date'])
+        if self.tsne_clusters is not None:
+            temp['tsne_cluster_label'] = self.tsne_clusters
+            cols.append('tsne_cluster_label')
+        # The date in the feature ID is the night start date
+        temp = (temp[cols].rename(columns={'date': 'night_start_date'}).
+                set_index(['id', 'night_start_date']))
 
-        df_clustered = df_clustered.join(temp)
+        new_df = df.reset_index().copy()
+        new_df['night_start_date'] = pd.to_datetime(
+            get_night_start_date(new_df['datetime'], self.night_start_hour))
+        new_df = new_df.reset_index().set_index(['id', 'night_start_date'])
+        new_df = new_df.join(temp)
 
-        return df_clustered.reset_index().set_index(['id', 'datetime'])
+        return new_df.reset_index().set_index(['id', 'datetime'])
 
     def visualise_night_features(self, feature_name, cluster_label=None):
         """
         Visualises the distribution of a specific night feature.
-        :param feature_name: (str), Name of the feature to visualize.
-        :param cluster_label: (int or None), If provided, filters by cluster label.
+        :param feature_name: (str), Name of the feature to visualise.
+        :param cluster_label: (int or None), If provided, filters by cluster
+            label.
         """
         if self.night_features_df is None:
             raise ValueError("Night features not extracted yet. Run "
                              "extract_night_level_features first.")
 
         if feature_name not in self.night_features_df.columns:
-            raise ValueError(f"Feature '{feature_name}' not found in night features.")
+            raise ValueError(f"Feature '{feature_name}' not found in night "
+                             f"features.")
 
         data = self.night_features_df.copy()
         if cluster_label is not None:
@@ -439,29 +441,32 @@ class NightClustering:
         plt.title(f'Distribution of {feature_name} by Cluster')
         plt.xlabel('Cluster Label')
         plt.ylabel(feature_name)
-        plt.savefig(FIGURES_DIR / f'night_feature_{feature_name}.png', dpi=400, bbox_inches='tight')
+        plt.savefig(FIGURES_DIR / f'night_feature_{feature_name}.png',
+                    dpi=400, bbox_inches='tight')
         plt.show()
 
-    def heatmap_cluster_features(self):
+    def heatmap_cluster_features(self, cluster_type='kmeans'):
         """
         Visualizes the mean features for each cluster as a heatmap.
-        :param cluster_label: (int or None), If provided, filters by cluster label.
+        :param cluster_type: (str) Defines which clusters to use
         """
         if self.night_features_df is None:
             raise ValueError("Night features not extracted yet. Run "
                              "extract_night_level_features first.")
+        clusters = (self.night_clusters if cluster_type == 'kmeans'
+                    else self.tsne_clusters)
 
         heatmap_data = self.scaled_night_features.copy()
-        heatmap_data['cluster_label'] = self.night_clusters
+        heatmap_data['cluster_label'] = clusters
         heatmap_data = heatmap_data.groupby('cluster_label').mean().T
         plt.figure(figsize=(6, 14))
-        sns.heatmap(heatmap_data, annot=True, cmap='viridis')
+        sns.heatmap(heatmap_data, annot=True, cmap='Spectral', center=0)
         plt.title('Cluster Centroids: Feature Means')
         plt.xlabel('Cluster', verticalalignment='top')
         plt.ylabel('Feature')
         plt.show()
 
-    def fit_tsne(self, perplexity=30, max_iter=1000, random_state=42):
+    def fit_tsne(self, perplexity=30, max_iter=1000):
         """
         Fits t-SNE to the night-level features.
         :param perplexity: (int), Perplexity parameter for t-SNE.
@@ -473,16 +478,20 @@ class NightClustering:
             raise ValueError("Night features not extracted yet. Run "
                              "extract_night_level_features first.")
 
-        features = self.night_features_df.drop(columns=['cluster_label'])
+        cluster_cols = ['cluster_label', 'tsne_cluster_label']
+        features = self.night_features_df.copy()
+        for col in cluster_cols:
+            if col in features.columns:
+                features = features.drop(columns=col)
         features_scaled = StandardScaler().fit_transform(features)
 
         tsne = TSNE(n_components=2, perplexity=perplexity, max_iter=max_iter,
-                    random_state=random_state)
+                    random_state=42)
         self.tsne_results = tsne.fit_transform(features_scaled)
 
         return self.tsne_results
 
-    def clustering_tsne(self):
+    def clustering_tsne(self, n_clusters=3):
         """
         Clusters the t-SNE results using KMeans and adds cluster labels to the
         night features DataFrame.
@@ -491,11 +500,10 @@ class NightClustering:
             raise ValueError("t-SNE results not computed yet. Run fit_tsne "
                              "first.")
 
-        # Perform KMeans clustering on t-SNE results
-        n_clusters = len(set(self.night_clusters))  # use the same number
         kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
         tsne_clusters = kmeans.fit_predict(self.tsne_results)
-        self.night_features_df['tsne_cluster_label'] = tsne_clusters
+        self.silhouette_score = silhouette_score(self.tsne_results,
+                                                 tsne_clusters)
         self.tsne_clusters = tsne_clusters
 
     def plot_tsne(self, cluster_type='kmeans'):
@@ -521,3 +529,106 @@ class NightClustering:
         plt.legend(title='Cluster', bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.tight_layout()
         plt.show()
+
+    def plot_cluster_distribution(self, pivot_counts: pd.DataFrame = None,
+                                  cluster_type: str = 'kmeans'):
+        """
+        Plots the distribution of clusters per patient as a horizontal bar
+        chart. Uses either KMeans clusters or t-SNE clusters.
+        :param pivot_counts: (pd.DataFrame) Dataframe of night counts per
+            cluster, with id index and columns for each cluster.
+        :param cluster_type: (str), Type of clustering to use for distribution
+            plot, either 'kmeans' or 'tsne'.
+        :return:
+        """
+        if pivot_counts is None:
+            pivot_counts = self.get_cluster_distributions(cluster_type)
+        pivot_percent = pivot_counts.div(pivot_counts.sum(axis=1), axis=0) * 100
+        totals = pivot_counts.sum(axis=1)
+        ax = pivot_percent.plot(kind='barh',
+                                stacked=True,
+                                figsize=(6, 6),
+                                colormap='viridis',
+                                title='Distribution of Clusters per Patient',
+                                xlabel='Percentage of Nights in Cluster',
+                                ylabel='Patient')
+
+        for i, (idx, total) in enumerate(totals.items()):
+            ax.text(102, i, f'{total}', va='center', ha='left',
+                    fontsize=9)
+
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(handles=handles, labels=labels,
+                  loc='upper center',
+                  bbox_to_anchor=(0.5, -0.12),
+                  fancybox=True,
+                  shadow=True,
+                  ncol=len(labels),
+                  borderaxespad=0.
+                  )
+        plt.show()
+
+    def get_cluster_distributions(self, cluster_type='kmeans'):
+        """
+        Returns the cluster distributions as a DataFrame.
+        :param cluster_type: (str), Type of clustering to use for distribution
+            plot, either 'kmeans' or 'tsne'.
+        :return: DataFrame with cluster distributions.
+        """
+        if cluster_type not in ['kmeans', 'tsne']:
+            raise ValueError("Invalid cluster_type. Choose 'kmeans' or 'tsne'.")
+        if cluster_type == 'tsne' and self.tsne_clusters is None:
+            raise ValueError("t-SNE clusters not computed yet. Run "
+                             "clustering_tsne first.")
+
+        features_df = self.return_dataset_with_clusters().reset_index()
+        cluster_col = 'cluster_label' if cluster_type == 'kmeans' \
+            else 'tsne_cluster_label'
+        pivot_counts = (
+            features_df[['id', cluster_col, 'night_start_date']].
+            drop_duplicates().
+            pivot_table(
+                index='id',
+                columns=cluster_col,
+                values='night_start_date',
+                aggfunc='count',
+                fill_value=0
+            ))
+        return pivot_counts
+
+    def calculate_distribution_metrics(self, cluster_type='kmeans'):
+        """
+        Calculates and prints the entropy and Gini coefficient of the cluster
+        distributions per patient. Entropy measures the uncertainty in the
+        distribution, while the Gini coefficient measures inequality.
+        :return: DataFrame with normalised entropy per patient.
+        """
+        pivot_counts = self.get_cluster_distributions(cluster_type)
+        entropy_per_patient = pivot_counts.apply(
+            lambda row: -np.nansum(
+                (row / 100) * np.log2((row / 100).replace(0, np.nan))), axis=1
+        )
+        # Average entropy across all patients
+        mean_entropy = entropy_per_patient.mean()
+        num_clusters = pivot_counts.shape[1]
+        entropy_per_patient_norm = entropy_per_patient / np.log2(num_clusters)
+        normalised_mean_entropy = entropy_per_patient_norm.mean()
+        print(f"Mean entropy of cluster distribution per patient: "
+              f"{mean_entropy:.3f}")
+        print(
+            f"Normalised mean entropy of cluster distribution per patient: "
+            f"{normalised_mean_entropy:.3f}")
+
+        def gini(array):
+            array = np.array(array)
+            array = array / array.sum()
+            diffsum = np.sum(np.abs(np.subtract.outer(array, array)))
+            return diffsum / (2 * len(array) * np.sum(array))
+
+        gini_per_patient = pivot_counts.apply(gini, axis=1)
+        mean_gini = gini_per_patient.mean()
+        print(
+            f"Mean Gini coefficient of cluster distribution per patient: "
+            f"{mean_gini:.3f}")
+
+        return entropy_per_patient_norm

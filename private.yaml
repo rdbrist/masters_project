@@ -2,18 +2,23 @@
 # 1. rename file to private.yaml
 # 2. fill in the properties
 
-# full path to the folder containing the zip files downloaded from Dropbox - DO NOT SHARE THIS DATA
+# full path to the folder containing the zip files downloaded from Dropbox -
+# DO NOT SHARE THIS DATA
 openAPS_data_path : 'C:\Users\ross\OneDrive - University of Bristol\Masters Project\n183 data'
 
-#this property decides if the scripts that write the preprocessed data write a file per person (FALSE) or a single
-#.csv file containing everyone's data
+#this property decides if the scripts that write the preprocessed data write a
+# file per person (FALSE) or a single .csv file containing everyone's data
 flat_file  : TRUE
 
-# This property sets whether the time should be left as-is, converted to UTC, or localised (i.e. dropping the timezone 
-# information. Options are 'keep', 'utc' and 'localise' respectively. 
+# This property sets whether the time should be left as-is, converted to UTC, or
+# localised (i.e. dropping the timezone information. Options are 'keep', 'utc'
+# and 'localise' respectively.
 treat_timezone : 'localise'
 
 # Here you can determine whether to use the subset of the data from the 2023
 #  OpenAPS data release that has been preprocessed, or the latest full data
 # release.
 limit_to_2023_subset : TRUE
+
+# This property sets whether the ids in the data should be anonymised or not.
+obfuscate_ids : TRUE

@@ -42,8 +42,8 @@ class ResampleDataFrame:
                         df.loc[:, col] = (df[col].apply(self.__round_numbers).
                                           astype(df[col].dtype))
                     except FutureWarning as e:
-                        logger.warning(f'Error occurred for person {self.zip_id} '
-                              f'in column {col}:\n{e}')
+                        logger.warning(f'Error occurred for person '
+                                       f'{self.zip_id} in column {col}:\n{e}')
             return df
 
         # resample by value column to avoid resampling over missing values in
@@ -190,12 +190,9 @@ class ResampleDataFrame:
                  fillna(0)
                  )
         except Exception as e:
-            logger.info(f'Error occurred while converting count columns to int for '
-                  f'zip_id {self.zip_id}:\n{e}')
-            #resulting_df.loc[:, count_columns] = 0
+            logger.info(f'Error occurred while converting count columns to int '
+                        f'for zip_id {self.zip_id}:\n{e}')
 
-
-        # reorder columns
         return resulting_df.loc[:, columns]
 
     @staticmethod

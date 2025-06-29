@@ -7,6 +7,8 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Patch
 
+from src.helper import get_night_start_date
+
 
 class Nights:
     """
@@ -18,20 +20,20 @@ class Nights:
     def __init__(self,
                  df: pd.DataFrame,
                  zip_id: int = None,
-                 night_start=time(19, 0),
-                 morning_end=time(12, 0),
-                 sample_rate = 15):
+                 night_start: time = None,
+                 morning_end: time = None,
+                 sample_rate: int = None):
         if not isinstance(df.index, pd.DatetimeIndex):
             raise ValueError("DataFrame index must be a DatetimeIndex.")
-        if zip_id is None:
-            raise ValueError("zip_id must be provided.")
+        if zip_id is None and sample_rate is None:
+            raise ValueError("zip_id and sample_rate must be provided.")
         self.zip_id = zip_id
         self.sample_rate = sample_rate
         self.df = df.sort_index()
         self.night_start = night_start
         self.morning_end = morning_end
-        self.df['night_start_date'] = (self.df.index.
-                                       map(self.get_night_start_date))
+        self.df['night_start_date'] = (
+            get_night_start_date(self.df.index, night_start.hour))
         self.nights = self._split_nights()
         self._calculate_stats()
 
@@ -61,25 +63,21 @@ class Nights:
             if bg_mean is None:
                 bg_mean = night_df['bg mean'].astype(float).copy()
             else:
-                bg_mean = pd.concat([bg_mean, night_df['bg mean'].astype(float)])
+                bg_mean = (
+                    pd.concat([bg_mean, night_df['bg mean'].astype(float)]))
         if bg_mean is None or bg_mean.empty:
             return np.nan, np.nan
         return bg_mean.mean(), bg_mean.std()
 
-    def get_night_start_date(self, timestamp, night_start_hour=None):
-        """Determine the start date of the night period based on the timestamp."""
-        if night_start_hour is None:
-            night_start_hour = self.night_start.hour
-        if timestamp.hour >= night_start_hour:
-            return timestamp.date()
-        else:
-            return (timestamp - pd.Timedelta(days=1)).date()
-
     def get_night_period(self, date):
         """
-        Given a date, night_start (datetime.time), and morning_end (datetime.time),
-        returns the corresponding start and end pd.Timestamp for the nightly period.
+        Given a date, night_start (datetime.time), and morning_end
+        (datetime.time), returns the corresponding start and end pd.Timestamp
+        for the nightly period.
         """
+        if self.night_start is None or self.morning_end is None:
+            raise ValueError("night_start and morning_end must be set to "
+                             "valid times for get_night_period to work.")
         date_obj = pd.Timestamp(date).date()
         night_start_dt = pd.Timestamp.combine(date_obj, self.night_start)
         if self.morning_end <= self.night_start:
@@ -119,10 +117,10 @@ class Nights:
 
     def total_intervals(self):
         """
-        Returns the number of intervals in the time period based on the sample rate.
+        Returns the number of intervals in the time period based on the sample
+        rate.
         """
         return self._get_total_minutes() // self.sample_rate
-
 
     def _split_nights(self):
         """
@@ -135,7 +133,8 @@ class Nights:
         dates = pd.to_datetime(self.df.index.date)
         for date in pd.unique(dates):
             night_start_dt, morning_end_dt = self.get_night_period(date)
-            mask = (self.df.index >= night_start_dt) & (self.df.index < morning_end_dt)
+            mask = ((self.df.index >= night_start_dt) &
+                    (self.df.index < morning_end_dt))
             night_df = self.df.loc[mask]
             if not night_df.empty:
                 nights.append((night_start_dt.date(), night_df))
@@ -152,7 +151,7 @@ class Nights:
         count_of_nights = len(self.nights)
         if not self.stats_per_night:
             logger.info(f'No stats per night have been calculated for '
-                         f'{self.zip_id}. Returning no output.')
+                        f'{self.zip_id}. Returning no output.')
             return
 
         bg_sd_values = [d['bg_sd'] for d in self.stats_per_night if
@@ -207,9 +206,13 @@ class Nights:
 
     def _create_stats_per_night(self):
         """
-        Produces a dictionary of stats per night that can then be used for selection or further aggregation in overall stats.
+        Produces a dictionary of stats per night that can then be used for
+        selection or further aggregation in overall stats.
         :return: List of dicts, one per night
         """
+        if self.night_start is None:
+            raise ValueError("night_start must be set to valid times for "
+                             "_create_stats_per_night to work.")
 
         def max_run_of_ones(lst):  # For max run of missing intervals
             max_run = current_run = 0
@@ -302,7 +305,8 @@ class Nights:
             return
 
         # Extract and sort by total break length
-        stats = sorted(self.stats_per_night, key=lambda d: d["total_break_duration"])
+        stats = sorted(self.stats_per_night,
+                       key=lambda d: d["total_break_duration"])
         total_break_duration = [d["total_break_duration"] for d in stats]
         num_breaks = [d["num_breaks"] for d in stats]
 
@@ -441,6 +445,7 @@ class Nights:
         plt.tight_layout()
         plt.show()
 
+
 def filter_nights(nights: Nights, missed_intervals: int,
                   max_break_run: float,
                   cob_nan_min: float,
@@ -466,7 +471,8 @@ def filter_nights(nights: Nights, missed_intervals: int,
         (night_date, night_df) for night_date, night_df in nights.nights
         if night_date in night_dates]
 
-    return  filtered_nights
+    return filtered_nights
+
 
 def nights_with_missed_intervals(
         nights_objects: List[Nights], missed_intervals: int) -> List[Nights]:

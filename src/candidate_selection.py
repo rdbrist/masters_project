@@ -9,7 +9,7 @@ from src.nights import Nights
 
 
 def remove_null_variable_individuals(df: pd.DataFrame,
-                                     logging: bool=False) -> pd.DataFrame:
+                                     logging: bool = False) -> pd.DataFrame:
     """
     Removes people from the dataset that have null or zero values for any
     IOB, COB or BG variable across their dataset.
@@ -34,24 +34,26 @@ def remove_null_variable_individuals(df: pd.DataFrame,
                     f' {ids}')
     return df[~df.index.get_level_values('id').isin(ids)]
 
-def get_all_individuals_night_stats(separated: (int, pd.DataFrame)=None,
-                          sample_rate: int=None,
-                          night_start: time=None,
-                          morning_end: time=None) -> pd.DataFrame:
+
+def get_all_individuals_night_stats(separated: (int, pd.DataFrame) = None,
+                                    sample_rate: int = None,
+                                    night_start: time = None,
+                                    morning_end: time = None) -> pd.DataFrame:
     """
-    Creates a list of Night objects for each individual and returns the stats
-    produced.
-    :param separated: (int, pd.DataFrame) zip_id and df of nights
-    :param sample_rate: (int) sample rate in minutes
-    :param night_start: (time) start time of night
-    :param morning_end: (time) end time of night
-    :return:
-    """
+     Creates a list of Night objects for each individual and returns the stats
+     produced.
+     :param separated: (int, pd.DataFrame) zip_id and df of nights
+     :param sample_rate: (int) sample rate in minutes
+     :param night_start: (time) start time of night
+     :param morning_end: (time) end time of night
+     :return:
+     """
     nights_objects = create_nights_objects(separated, sample_rate,
                                            night_start, morning_end)
     return provide_data_statistics(nights_objects)
 
-def provide_data_statistics(night_objects: [Nights]=None) -> pd.DataFrame:
+
+def provide_data_statistics(night_objects: [Nights] = None) -> pd.DataFrame:
     """
     Creates statistics from the analysis of the nights of an individual through
     iteration of the Nights class. Useful in assessing the level of
@@ -77,10 +79,11 @@ def provide_data_statistics(night_objects: [Nights]=None) -> pd.DataFrame:
 
     return df_overall_stats
 
-def create_nights_objects(separated: (int, pd.DataFrame)=None,
-                          sample_rate: int=None,
-                          night_start: time=None,
-                          morning_end: time=None) -> [Nights]:
+
+def create_nights_objects(separated: (int, pd.DataFrame) = None,
+                          sample_rate: int = None,
+                          night_start: time = None,
+                          morning_end: time = None) -> [Nights]:
     """
     Creates Nights objects from list of separated dataframes for each
     patient
@@ -100,13 +103,14 @@ def create_nights_objects(separated: (int, pd.DataFrame)=None,
         nights_objects.append(nights)
     return nights_objects
 
+
 def plot_nights_vs_avg_intervals(df_overall_stats: pd.DataFrame):
     """
     Plot the number of nights vs average intervals with markers showing the
     length of average total length of missing intervals in minutes.
     :param df_overall_stats: Dataframe of individual (id index) and stat columns
     """
-    marker_sizes = (df_overall_stats['avg_total_break_length'] + 1) / 4
+    marker_sizes = (df_overall_stats['avg_total_break_duration'] + 1) / 4
 
     max_y = df_overall_stats['period_total_intervals'].max()
 
@@ -140,5 +144,3 @@ def plot_nights_vs_avg_intervals(df_overall_stats: pd.DataFrame):
     plt.tight_layout()
     plt.savefig(FIGURES_DIR / 'nights_vs_avg_intervals.png', dpi=400)
     plt.show()
-
-

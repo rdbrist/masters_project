@@ -47,9 +47,9 @@ class HMMEventDetector:
         """
         X_list = []
         lengths = []
-        
+
         df_subset = df_subset.reset_index().copy()
-        
+
         for individual_id in df_subset['id'].unique():
             individual_df = df_subset[
                 df_subset['id'] == individual_id].copy()
@@ -62,7 +62,8 @@ class HMMEventDetector:
                 print(f"Warning: No data for individual {individual_id} in "
                       f"this subset.")
 
-        # If X_list is empty, return empty arrays to prevent concatenation errors
+        # If X_list is empty, return empty arrays to prevent concatenation
+        # errors
         if not X_list:
             return np.array([]).reshape(0, len(self.feature_cols)), []
 
@@ -127,7 +128,8 @@ class HMMEventDetector:
                 continue
             individual_features = individual_df[self.feature_cols].values
 
-            # Scale the individual features using the *same* scaler fitted during training
+            # Scale the individual features using the *same* scaler fitted
+            # during training
             scaled_features = self.scaler.transform(individual_features)
 
             # Predict
@@ -160,8 +162,9 @@ class HMMEventDetector:
 
         df_with_states = self.infer_states(individual_df)
 
-        fig, axes = plt.subplots(len(self.original_var_cols) + 1, 1, figsize=(
-            15, 3 * (len(self.original_var_cols) + 1)), sharex=True)
+        fig, axes = (
+            plt.subplots(len(self.original_var_cols) + 1, 1, figsize=(
+            15, 3 * (len(self.original_var_cols) + 1)), sharex=True))
         fig.suptitle(f'HMM Inferred Events for Individual: {individual_id}',
                      fontsize=16)
 
@@ -190,8 +193,8 @@ class HMMEventDetector:
 
     def visualize_cluster_events(self, cluster_label: int):
         """
-        Visualizes the average inferred HMM states against average original variables
-        for a specific night cluster.
+        Visualizes the average inferred HMM states against average original
+        variables for a specific night cluster.
         :param cluster_label: (int) The label of the night cluster to visualize.
         """
         if self.model is None:
@@ -206,9 +209,10 @@ class HMMEventDetector:
 
         df_with_states = self.infer_states(cluster_df)
 
-        # Calculate average values and inferred states per time-of-day for the cluster
-        # Create a time-of-day index (e.g., 0 for 17:00, 1 for 17:30, etc.)
-        # Assuming all nights have the same number of intervals and start/end times
+        # Calculate average values and inferred states per time-of-day for the
+        # cluster. Create a time-of-day index (e.g., 0 for 17:00, 1 for 17:30,
+        # etc.). Assuming all nights have the same number of intervals and
+        # start/end times
         df_with_states['time_index'] = df_with_states.groupby(
             'id').cumcount()
 
@@ -219,7 +223,8 @@ class HMMEventDetector:
                 0] if not x.mode().empty else -1)  # Use mode for state
         ).reset_index()
 
-        # Map time_index back to representative datetime (first night's datetime values)
+        # Map time_index back to representative datetime (first night's
+        # datetime values)
         first_night_df = self.df[
             self.df['id'] == self.df['id'].unique()[
                 0]].sort_values('datetime').copy()
@@ -232,8 +237,8 @@ class HMMEventDetector:
         fig, axes = plt.subplots(len(self.original_var_cols) + 1, 1, figsize=(
             15, 3 * (len(self.original_var_cols) + 1)), sharex=True)
         fig.suptitle(
-            f'HMM Inferred Events for Night Cluster: {cluster_label} (Averaged)',
-            fontsize=16)
+            f'HMM Inferred Events for Night Cluster: '
+            f'{cluster_label} (Averaged)', fontsize=16)
 
         # Plot averaged original variables
         for i, var in enumerate(self.original_var_cols):

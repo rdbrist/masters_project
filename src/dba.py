@@ -3,18 +3,25 @@ import numpy as np
 from datetime import datetime
 from tslearn.barycenters import dtw_barycenter_averaging
 from tslearn.utils import to_time_series_dataset
+from src.helper import get_night_start_date
+
 
 class DBAAverager:
-    def __init__(self, df: pd.DataFrame, night_start_hour: int = 17, morning_end_hour: int = 11):
+    def __init__(self, df: pd.DataFrame,
+                 night_start_hour: int = None,
+                 morning_end_hour: int = None):
         """
-        :param df: DataFrame with datetime index and time series columns.
-        :param night_start_hour: Hour when night starts (0-23).
-        :param morning_end_hour: Hour when morning ends (0-23).
+        :param df: (pd.DataFrame) df with datetime index and time series columns
+        :param night_start_hour: (int) Hour when night starts (0-23)
+        :param morning_end_hour: (int) Hour when morning ends (0-23)
         """
+        if night_start_hour is None or morning_end_hour is None:
+            raise ValueError("Both night_start_hour and morning_end_hour must "
+                             "be provided.")
         self.df = df
         self.cols = df.columns.tolist()
-        self.night_start = night_start_hour
-        self.morning_end = morning_end_hour
+        self.night_start_hour = night_start_hour
+        self.morning_end_hour = morning_end_hour
         self.full_cycle_times = self._generate_full_cycle_times()
         self.dba_averaged_dataframe = None
 
@@ -26,16 +33,22 @@ class DBAAverager:
             ]
             X = to_time_series_dataset(night_profiles)
             X_imputed = self._impute_missing(X)
-            dba_avg = dtw_barycenter_averaging(X_imputed, max_iter=100, tol=1e-3, verbose=False)
+            dba_avg = dtw_barycenter_averaging(X_imputed,
+                                               max_iter=100,
+                                               tol=1e-3,
+                                               verbose=False)
             if dba_avg.shape[0] == len(self.full_cycle_times):
-                dba_avg_df = pd.DataFrame(dba_avg, columns=self.cols, index=self.full_cycle_times)
+                dba_avg_df = pd.DataFrame(dba_avg, columns=self.cols,
+                                          index=self.full_cycle_times)
                 dba_avg_df.index.name = 'time'
                 self.dba_averaged_dataframe = dba_avg_df
             else:
-                print(f"Shape mismatch: {dba_avg.shape[0]} vs {len(self.full_cycle_times)}")
+                print(f"Shape mismatch: {dba_avg.shape[0]} vs "
+                      f"{len(self.full_cycle_times)}")
 
     def night_hour(self, hour):
-        return hour - self.night_start if hour >= self.night_start else 24 - self.night_start + hour
+        return (hour - self.night_start_hour if hour >= self.night_start_hour
+                else 24 - self.night_start_hour + hour)
 
     def get_dba_averaged_dataframe(self):
         """Return the DBA averaged DataFrame."""
@@ -73,22 +86,21 @@ class DBAAverager:
 
     def _generate_full_cycle_times(self):
         """Generate a list of time points for the full night cycle."""
-        evening = pd.to_timedelta(np.arange(self.night_start, 24, 0.5), unit='hour')
-        morning = pd.to_timedelta(np.arange(0, self.morning_end, 0.5), unit='hour')
+        evening = (pd.to_timedelta(np.arange(self.night_start_hour, 24, 0.5),
+                                   unit='hour'))
+        morning = (pd.to_timedelta(np.arange(0, self.morning_end_hour, 0.5),
+                                   unit='hour'))
         return [(datetime.min + td).time() for td in evening.append(morning)]
-
-    def get_night_start_date(self, timestamp, start_hour=None):
-        """Get the date corresponding to the start of the night for a timestamp."""
-        start_hour = start_hour or self.night_start
-        return timestamp.date() if timestamp.hour >= start_hour else (timestamp - pd.Timedelta(days=1)).date()
 
     def _get_night_profiles(self):
         """Extract and align night profiles from the DataFrame."""
         df_reset = self.df.reset_index()
-        df_reset['night_start_date'] = df_reset['datetime'].apply(self.get_night_start_date)
+        df_reset['night_start_date'] = (
+            get_night_start_date(df_reset['datetime'], self.night_start_hour))
         df_reset['time'] = df_reset['datetime'].dt.time
         return [
-            night_df.set_index('time')[self.cols].reindex(self.full_cycle_times).values
+            night_df.set_index('time')[self.cols].
+            reindex(self.full_cycle_times).values
             for _, night_df in df_reset.groupby('night_start_date')
         ]
 
@@ -101,26 +113,7 @@ class DBAAverager:
             for j in range(X.shape[2]):
                 series = pd.Series(X[i, :, j]).astype('float64')
                 if series.isna().any():
-                    X[i, :, j] = series.interpolate(method='linear', limit_direction='both').values
+                    X[i, :, j] = (
+                        series.interpolate(method='linear',
+                                           limit_direction='both').values)
         return X
-
-
-if __name__ == "__main__":
-    from src.helper import load_final_filtered_csv
-    from src.configurations import Configuration
-
-    config = Configuration()
-    df = load_final_filtered_csv(config, interpolate_cob=True)
-
-    grouped = df.groupby('id')
-    key, df = next(iter(grouped))
-    print(df.head())
-    dbaa = DBAAverager(df[['iob mean','cob mean','bg mean']], night_start_hour=17, morning_end_hour=11)
-    dbaa_avg_df = dbaa.get_dba_averaged_dataframe()
-    if dbaa_avg_df is not None:
-        print(dbaa_avg_df.head())
-    else:
-        print("No DBA averaged DataFrame available.")
-
-    print('----------- with variance------------')
-    print(dbaa.get_dba_and_variance_dataframe())

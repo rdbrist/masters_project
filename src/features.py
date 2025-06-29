@@ -12,15 +12,18 @@ from src.helper import check_df_index
 
 class FeatureSet:
 
-    def __init__(self, df: pd.DataFrame=None, input_path: Path=None,
-                 sample_rate: int=30):
+    def __init__(self, df: pd.DataFrame = None, input_path: Path = None,
+                 sample_rate: int = None):
         """
-        Class to process pre-processed dataset into features to be used in training
+        Class to process pre-processed dataset into features to be used in t
+        raining
         the models.
         :param df: DataFrame containing pre-processed data.
         :param input_path: Path to the pre-processed data file.
         :param sample_rate: Sample rate in minutes for the data.
         """
+        if sample_rate is None:
+            raise ValueError("Sample rate must be provided.")
         self.df = df
         self.scaler = None
         self.sample_rate = sample_rate
@@ -88,7 +91,7 @@ class FeatureSet:
         if columns is None:
             columns = self.mean_cols
         self.df['time_diff'] = (self.df.index.
-                                     get_level_values('datetime').diff())
+                                get_level_values('datetime').diff())
         first_idx = ~self.df.index.get_level_values('id').duplicated()
         self.df.loc[first_idx, 'time_diff'] = np.nan
 
@@ -152,11 +155,11 @@ class FeatureSet:
             return FunctionTransformer(lambda x: np.cos(x / period * 2 * np.pi))
 
         self.df['hour_of_day'] = (self.df.index.
-                                       get_level_values('datetime').
-                                       hour.astype(float))
+                                  get_level_values('datetime').
+                                  hour.astype(float))
         self.df['hour_sin'] = (
             sin_transformer(24).fit_transform(self.df['hour_of_day']))
-        self.df['hour_cos'] =(
+        self.df['hour_cos'] = (
             cos_transformer(24).fit_transform(self.df['hour_of_day']))
         self.new_feature_cols.extend(['hour_of_day', 'hour_sin', 'hour_cos'])
 
@@ -178,9 +181,9 @@ class FeatureSet:
     def read_feature_set_from_file(self):
         try:
             self.df = (pd.read_csv(self.output_path).
-                                set_index(['id', 'datetime']).
-                                drop(columns='Unnamed: 0').
-                                sort_index(level=['id', 'datetime']))
+                       set_index(['id', 'datetime']).
+                       drop(columns='Unnamed: 0').
+                       sort_index(level=['id', 'datetime']))
         except FileNotFoundError:
             raise FileNotFoundError(f'File {self.output_path} not found.')
 

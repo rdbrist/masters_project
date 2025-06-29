@@ -45,7 +45,8 @@ class ReadRecord:
 
         missing_cols = [col for col in keep_cols if col not in self.df.columns]
         if missing_cols:
-            logger.info(f"Columns not in file for zip {self.zip_id}: {missing_cols}")
+            logger.info(f"Columns not in file for zip {self.zip_id}: "
+                        f"{missing_cols}")
             self.df[missing_cols] = None
 
         result = self.df[keep_cols].copy()
@@ -196,7 +197,7 @@ def extract_timezone_offset(read_record: ReadRecord,
 
 
 def convert_timezone_to_utc_offset(tz_val: str,
-                                   dt: datetime=None) -> Union[int, None]:
+                                   dt: datetime = None) -> Union[int, None]:
     """
     Converts an IANA region string or a datetime.timezone to its UTC offset
     as integer hours. Returns None if input is intz_valid or offset cannot be
@@ -424,7 +425,6 @@ def read_profile_from_zip(file_name, config):
                          read_profile_file_to_df)
 
 
-
 def read_profile_file_to_df(archive, file, read_record, _):
     with archive.open(file, mode="r") as header_context:
         text_io_wrapper = TextIOWrapper(header_context, encoding="utf-8")
@@ -503,6 +503,7 @@ def get_all_offsets_df_from_profiles(config: Configuration) -> pd.DataFrame:
                           drop_duplicates())
     return df_profile_offsets
 
+
 def read_profile_offsets_csv(config: Configuration) -> pd.DataFrame:
     """
     Reads the profile offsets CSV file and returns a DataFrame.
@@ -518,6 +519,7 @@ def read_profile_offsets_csv(config: Configuration) -> pd.DataFrame:
         logger.error(f'Profile offsets CSV file not found: '
                      f'{config.profile_offsets_csv_file}')
         return pd.DataFrame()
+
 
 def is_a_profile_csv_file(config, patient_id, file_path):
     # file starts with patient id and _entries

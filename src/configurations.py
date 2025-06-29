@@ -78,6 +78,7 @@ class Resampling:
     general_agg_cols_dictionary = {GeneralisedCols.id: 'first',
                                    GeneralisedCols.system: 'first',
                                    }
+
     @staticmethod
     def file_name():
         return ''
@@ -112,6 +113,7 @@ class Hourly(Resampling):
         elif filetype == 'parquet':
             return 'hourly_iob_cob_bg.parquet'
 
+
 @dataclass
 class ThirtyMinute(Resampling):
     minutes = 30
@@ -128,6 +130,7 @@ class ThirtyMinute(Resampling):
             return '30min_iob_cob_bg.csv'
         elif filetype == 'parquet':
             return '30min_iob_cob_bg.parquet'
+
 
 @dataclass
 class FifteenMinute(Resampling):
@@ -191,9 +194,11 @@ class Configuration:
     treat_timezone = config['treat_timezone']
     limit_to_2023_subset = config['limit_to_2023_subset']
     if limit_to_2023_subset:
-        subset_ids = pd.read_csv(INTERIM_DATA_DIR / "15min_iob_cob_bg_insulin_need.csv",
-                         usecols=['id'])
+        subset_ids = pd.read_csv(INTERIM_DATA_DIR /
+                                 "15min_iob_cob_bg_insulin_need.csv",
+                                 usecols=['id'])
         zip_ids_2023_subset = subset_ids['id'].unique().tolist()
+    obfuscate_ids = config['obfuscate_ids']
     perid_data_folder = INTERIM_DATA_DIR / 'perid'
     csv_extension = '.csv'
     parquet_extension = '.parquet'
@@ -355,6 +360,7 @@ class Configuration:
         entries_col = ['time']
         return (profile_col + device_status_cols_a +
                 device_status_cols_b + entries_col)
+
 
 # Configuration to use for unit tests. This turns Wandb logging off.
 @dataclass

@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-import time
 import numpy as np
 from loguru import logger
 from datetime import datetime, time, timedelta
@@ -10,9 +9,6 @@ from sklearn.metrics import mean_absolute_error
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller
-from tslearn.barycenters import dtw_barycenter_averaging
-from tslearn.utils import to_time_series_dataset
-
 from src.dba import DBAAverager
 
 
@@ -105,8 +101,8 @@ def p_q_result(ytrain: pd.DataFrame,
             start_time = time.time()
             model = ARIMA(ytrain, order=order).fit()
             aicbic_list.append({'Order': [order],
-                          'AIC': [model.aic],
-                          'BIC': [model.bic]})
+                                'AIC': [model.aic],
+                                'BIC': [model.bic]})
             elapsed_time = round(time.time() - start_time, 2)
             print(f"Trained ARIMA {order} in {elapsed_time} seconds.")
             y_pred = model.predict()
@@ -150,6 +146,7 @@ def run_adf(df):
     print("A more negative test statistic indicates stronger evidence against "
           "the null hypothesis.")
 
+
 def split_on_time_gaps(df: pd.DataFrame,
                        value_col: str,
                        days_threshold: int = 3) -> list:
@@ -172,6 +169,7 @@ def split_on_time_gaps(df: pd.DataFrame,
     group = (gaps > days_threshold).cumsum()
     return [group_df for _, group_df in df.groupby(group) if not group_df.empty]
 
+
 def remove_zero_or_null_days(df: pd.DataFrame, value_col: str) -> pd.DataFrame:
     """
     Keep only days where all values where at least one of the timestamps is
@@ -193,17 +191,20 @@ def remove_zero_or_null_days(df: pd.DataFrame, value_col: str) -> pd.DataFrame:
     date_mask = np.array([d in keep_dates for d in df.index.date])
     return df[date_mask]
 
+
 def _plot_means_for_individual(
-    df, variables, groupby_cols, x_col, x_label, title, method='mean'
-):
+        df, variables, groupby_cols, x_col, x_label, title,
+        night_start, morning_end, method='mean'):
     if 'hour' not in df:
         dt_index = df.index.get_level_values('datetime')
         df['hour'] = dt_index.hour
 
     if method == 'mean':
-        stats = df.groupby(groupby_cols)[variables].agg(['mean', 'var']).reset_index()
+        stats = (df.groupby(groupby_cols)[variables].
+                 agg(['mean', 'var']).reset_index())
     elif method == 'dba':
-        dbaa = DBAAverager(df[variables], night_start_hour=17, morning_end_hour=11)
+        dbaa = DBAAverager(df[variables], night_start_hour=night_start,
+                           morning_end_hour=morning_end)
         stats = dbaa.get_dba_and_variance_dataframe()
         if stats is None:
             logger.warning("No DBA averaged DataFrame available.")
@@ -241,35 +242,6 @@ def _plot_means_for_individual(
     plt.tight_layout()
     plt.show()
 
-# def plot_night_means_for_individual(
-#     df, zip_id, variables=None, night_start=17, morning_end=11
-# ):
-#     """
-#     Plot the means of specified variables for an individual during night hours.
-#      :param df: DataFrame containing time series data with a multi-index
-#         including 'id' and 'datetime'.
-#     :param zip_id: int, identifier for the individual.
-#     :param variables: list of str, names of the variables to plot. If None, ['iob mean', 'cob mean', 'bg mean'] are used
-#     :param night_start: int, hour when the night starts (0-23).
-#     :param morning_end: int, hour when the morning ends (0-23).
-#     """
-#     if variables is None:
-#         variables = ['iob mean', 'cob mean', 'bg mean']
-#
-#     def night_hour(hour):
-#         return hour - night_start if hour >= night_start else 24 - night_start + hour
-#     df_new = df.copy()
-#     dt_index = df_new.index.get_level_values('datetime')
-#     df_new['hour'] = dt_index.hour
-#     df_new['night_hour'] = df_new['hour'].map(night_hour)
-#     df_night = df_new[(df_new['hour'] >= night_start) | (df_new['hour'] < morning_end)]
-#     _plot_means_for_individual(
-#         df_night, variables,
-#         groupby_cols=['night_hour', 'hour'],
-#         x_col='night_hour',
-#         x_label='Hour',
-#         title=f'Person {str(zip_id)}'
-#     )
 
 def plot_night_means_for_individual(
     df, zip_id, variables=None, night_start=17, morning_end=11, method='mean'
@@ -289,22 +261,28 @@ def plot_night_means_for_individual(
         variables = ['iob mean', 'cob mean', 'bg mean']
 
     def night_hour(hour):
-        return hour - night_start if hour >= night_start else 24 - night_start + hour
+        return (hour - night_start if hour >= night_start
+                else 24 - night_start + hour)
     df_new = df.copy()
     night_count = df_new['night_start_date'].nunique()
     dt_index = df_new.index.get_level_values('datetime')
     df_new['hour'] = dt_index.hour
     df_new['night_hour'] = df_new['hour'].map(night_hour)
 
-    df_night = df_new[(df_new['hour'] >= night_start) | (df_new['hour'] < morning_end)]
+    df_night = df_new[(df_new['hour'] >= night_start) |
+                      (df_new['hour'] < morning_end)]
     _plot_means_for_individual(
         df_night, variables,
-        groupby_cols=['night_start_date', 'night_hour', 'hour', 'time'] if method == 'dba' else ['night_hour', 'hour', 'time'],
+        groupby_cols=(['night_start_date', 'night_hour', 'hour', 'time']
+                      if method == 'dba' else ['night_hour', 'hour', 'time']),
         x_col='time',
         x_label='Hour',
         title=f'Person {str(zip_id)}, nights: {night_count}',
-        method=method
+        method=method,
+        night_start=night_start,
+        morning_end=morning_end
     )
+
 
 def plot_hourly_means_for_individual(df, zip_id, variables=None):
     """
@@ -312,7 +290,8 @@ def plot_hourly_means_for_individual(df, zip_id, variables=None):
     :param df: DataFrame containing time series data with a multi-index
         including 'id' and 'datetime'.
     :param zip_id: int, identifier for the individual.
-    :param variables: list of str, names of the variables to plot. If None, ['iob mean', 'cob mean', 'bg mean'] are used
+    :param variables: list of str, names of the variables to plot. If None,
+        ['iob mean', 'cob mean', 'bg mean'] are used
     """
     if variables is None:
         variables = ['iob mean', 'cob mean', 'bg mean']
@@ -325,7 +304,9 @@ def plot_hourly_means_for_individual(df, zip_id, variables=None):
         title=f'Person {str(zip_id)} (hourly means across all days)'
     )
 
-def return_count_intervals(start: time, end: time, minute_interval: int=30) -> int:
+
+def return_count_intervals(start: time, end: time,
+                           minute_interval: int = 30) -> int:
     today = datetime.today().date()
     dt_start = datetime.combine(today, start)
     dt_end = datetime.combine(today, end)
@@ -333,5 +314,3 @@ def return_count_intervals(start: time, end: time, minute_interval: int=30) -> i
         dt_end += timedelta(days=1)
     total_minutes = int((dt_end - dt_start).total_seconds() // 60)
     return total_minutes // minute_interval
-
-

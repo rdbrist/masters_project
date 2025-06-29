@@ -3,8 +3,8 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from datetime import time
 
-from src.candidate_selection import get_all_individuals_night_stats, \
-    create_nights_objects, provide_data_statistics
+from src.candidate_selection import (create_nights_objects,
+                                     provide_data_statistics)
 from src.nights import Nights
 
 
@@ -12,10 +12,10 @@ class BGAnalyser:
     """
     Class for analysing blood glucose data from nights.
     """
-    def __init__(self, separated_dfs: (int, pd.DataFrame)=None,
-                 night_start: time=None,
-                 morning_end: time=None,
-                 sample_rate: int=None):
+    def __init__(self, separated_dfs: (int, pd.DataFrame) = None,
+                 night_start: time = None,
+                 morning_end: time = None,
+                 sample_rate: int = None):
         if any(p is None for p in
                [separated_dfs, night_start, morning_end, sample_rate]):
             raise ValueError('Parameters all need to be set to instantiate '
@@ -41,8 +41,7 @@ class BGAnalyser:
             bg_zscore = [stats['bg_zscore'] for stats in
                          nights.get_stats_per_night()]
             night_dates = [stats['night_date'] for stats in
-                         nights.get_stats_per_night()]
-            series = pd.Series(bg_zscore, index=night_dates)
+                           nights.get_stats_per_night()]
             for i, z in enumerate(bg_zscore):
                 zscore_data.append({'zip_id': nights.zip_id,
                                     'night_date': night_dates[i],
@@ -84,10 +83,10 @@ class BGAnalyser:
                         value_name='Value'))
 
         fig, ax1 = plt.subplots(figsize=(6, 4))
-
-        sns.boxplot(x='Variability Measure', y='Value', data=melted[
-            melted['Variability Measure'].isin(['bg_sd_median', 'bg_iqr_median'])],
-                    ax=ax1)
+        data = melted[
+            melted['Variability Measure'].
+            isin(['bg_sd_median', 'bg_iqr_median'])]
+        sns.boxplot(x='Variability Measure', y='Value', data=data, ax=ax1)
         ax1.set_ylabel('SD / IQR (mg/dL)')
         ax1.set_xlabel('Variability Measure')
         ax1.set_title(
@@ -97,7 +96,8 @@ class BGAnalyser:
 
         ax2 = ax1.twinx()
         sns.boxplot(x='Variability Measure', y='Value',
-                    data=melted[melted['Variability Measure'] == 'bg_range_median'],
+                    data=melted[melted['Variability Measure'] ==
+                                'bg_range_median'],
                     ax=ax2, boxprops=dict(facecolor='coral', alpha=0.5))
         ax2.set_ylabel('Range (mg/dL)')
         ax2.grid(False)
@@ -107,10 +107,10 @@ class BGAnalyser:
         plt.tight_layout()
         plt.show()
 
-def plot_zscores_individual_boxplot(zip_id: int = None,
-                                         nights: Nights = None):
+
+def plot_zscores_individual_boxplot(zip_id: int = None, nights: Nights = None):
     """
-    Plot the z-scores of the blood glucose values for an individual in a boxplot.
+    Plot the z-scores of the blood glucose values for an individual in a boxplot
     :param zip_id: (int) ID of the zip code to filter the nights.
     :param nights: (Nights) Nights object containing the nights data.
     :return:
@@ -122,5 +122,3 @@ def plot_zscores_individual_boxplot(zip_id: int = None,
     zscores = stats['bg_zscore']
 
     sns.boxplot(zscores, color='lightblue')
-
-

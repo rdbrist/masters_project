@@ -9,7 +9,7 @@ def write_read_record(records: [ReadRecord],
                       as_flat_file: bool,
                       folder: Path,
                       file_name: str,
-                      keep_cols: Union[list,None] = None,
+                      keep_cols: Union[list, None] = None,
                       file_type: str = 'csv'):
     """
     Writes either a flat file (multiple ids) or a file in a per id folder

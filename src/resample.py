@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+
 def resample_to_30_minute_intervals(df: pd.DataFrame) -> pd.DataFrame:
     """
     Resample the dataframe to 30-minute intervals.
