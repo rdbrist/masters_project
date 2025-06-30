@@ -26,6 +26,7 @@ class DBAAverager:
         self.dba_averaged_dataframe = None
 
         night_profiles = self._get_night_profiles()
+        print(f'Night profiles: {len(night_profiles)}')
         if night_profiles:
             night_profiles = [
                 np.where(pd.isna(profile), np.nan, profile) for profile in
@@ -54,7 +55,7 @@ class DBAAverager:
         """Return the DBA averaged DataFrame."""
         return self.dba_averaged_dataframe
 
-    def get_dba_and_variance_dataframe(self):
+    def get_dba_and_variance_dataframe(self, rolling_window=None):
         """
         Return a DataFrame with MultiIndex columns (variable, 'dba' or 'var'),
         containing both the DBA mean and variance for each time point. It also
@@ -68,15 +69,27 @@ class DBAAverager:
         X = np.stack(night_profiles)
         X_imputed = self._impute_missing(X)
         dba_avg = self.dba_averaged_dataframe.values
-        var = np.nanvar(X_imputed, axis=0)
+
+        if rolling_window is not None:
+            # Compute rolling variance for each profile
+            rolling_vars = []
+            for profile in X_imputed:
+                df = pd.DataFrame(profile, columns=self.cols,
+                                  index=self.full_cycle_times)
+                roll_var = df.rolling(window=rolling_window, min_periods=1,
+                                      center=True).var()
+                rolling_vars.append(roll_var.values)
+            var = np.nanmean(np.stack(rolling_vars), axis=0)
+        else:
+            var = np.nanvar(X_imputed, axis=0)
 
         # Build a dict of Series for each (variable, stat) column
         data = {}
         for i, col in enumerate(self.cols):
-            data[(col, 'dba')] = pd.Series(dba_avg[:, i],
-                                           index=self.full_cycle_times)
-            data[(col, 'var')] = pd.Series(var[:, i],
-                                           index=self.full_cycle_times)
+            data[(col, 'dba')] = (
+                pd.Series(dba_avg[:, i], index=self.full_cycle_times))
+            data[(col, 'var')] = (
+                pd.Series(var[:, i], index=self.full_cycle_times))
 
         result_df = pd.DataFrame(data)
         result_df.index.name = 'time'
@@ -98,10 +111,11 @@ class DBAAverager:
         df_reset['night_start_date'] = (
             get_night_start_date(df_reset['datetime'], self.night_start_hour))
         df_reset['time'] = df_reset['datetime'].dt.time
+
         return [
             night_df.set_index('time')[self.cols].
             reindex(self.full_cycle_times).values
-            for _, night_df in df_reset.groupby('night_start_date')
+            for _, night_df in df_reset.groupby(['id','night_start_date'])
         ]
 
     def _impute_missing(self, X):

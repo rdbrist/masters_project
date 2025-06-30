@@ -11,7 +11,7 @@ from src.data_processing.read_preprocessed_df \
     import apply_and_filter_by_offsets, ReadPreprocessedDataFrame
 from src.resample import resample_to_30_minute_intervals
 from src.data_processing.read import read_profile_offsets_csv
-from src.time_series_analysis import plot_night_means_for_individual
+from src.time_series_analysis import plot_night_time_series
 
 
 def main():
@@ -69,7 +69,7 @@ def main():
     df_all_selected = consolidate_df_from_nights(nights_objects)
 
     for zip_id in candidates:
-        plot_night_means_for_individual(df_all_selected, zip_id,
+        plot_night_time_series(df_all_selected, zip_id=zip_id,
                                         night_start=night_start.hour,
                                         morning_end=morning_end.hour)
 

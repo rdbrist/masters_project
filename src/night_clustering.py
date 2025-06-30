@@ -170,10 +170,6 @@ class NightClustering:
                     'median': None,
                     'standard_deviation': None,
                     'root_mean_square': None,
-                    'first_location_of_maximum': None,
-                    'last_location_of_maximum': None,
-                    'first_location_of_minimum': None,
-                    'last_location_of_minimum': None,
                 },
                 'bg min': {
                     'maximum': None,
@@ -181,10 +177,6 @@ class NightClustering:
                     'median': None,
                     'standard_deviation': None,
                     'root_mean_square': None,
-                    'first_location_of_maximum': None,
-                    'last_location_of_maximum': None,
-                    'first_location_of_minimum': None,
-                    'last_location_of_minimum': None,
                 },
             }
             return None
@@ -410,7 +402,8 @@ class NightClustering:
 
         return df
 
-    def return_dataset_with_clusters(self, df: pd.DataFrame = None):
+    def return_dataset_with_clusters(self, df: pd.DataFrame = None,
+                                     scaled: bool = False):
         """
         Returns the original dataset with the cluster labels added. Adds
         clusters from both the original KMeans clustering and the t-SNE if
@@ -419,6 +412,7 @@ class NightClustering:
                    If None, uses the original DataFrame passed during
                    initialisation. DataFrame should have a MultiIndex ['id',
                    'datetime'].
+        :param scaled: (bool), If True, returns the scaled night features
         :return: DataFrame with original features and cluster labels, plus
             'night_start_date' indicating the start of the night period.
         """
@@ -444,8 +438,10 @@ class NightClustering:
         new_df['night_start_date'] = pd.to_datetime(
             get_night_start_date(new_df['datetime'], self.night_start_hour))
         new_df = new_df.reset_index().set_index(['id', 'night_start_date'])
+        if scaled:
+            new_df[self.variable_cols] = StandardScaler().fit_transform(
+                new_df[self.variable_cols].values)
         new_df = new_df.join(temp)
-
         return new_df.reset_index().set_index(['id', 'datetime'])
 
     def visualise_night_features(self, feature_name, cluster_label=None):
@@ -491,14 +487,14 @@ class NightClustering:
 
         # Scaled features for heatmap color
         scaled = self.scaled_night_features.copy()
+        scaled_cols = scaled.columns
         scaled['cluster_label'] = clusters
         heatmap_data = scaled.groupby('cluster_label').mean().T
 
         # Unscaled features and ensure the shapes match for annotation overlay
         unscaled = self.night_features_df.copy()
-
+        unscaled = unscaled[scaled_cols]
         unscaled['cluster_label'] = clusters
-        unscaled = unscaled[scaled.columns]
         annot_data = unscaled.groupby('cluster_label').mean().T
         # Format annotation values for better readability
         annot_fmt = annot_data.round(2).astype(str)
@@ -677,3 +673,21 @@ class NightClustering:
             f"{mean_gini:.3f}")
 
         return entropy_per_patient_norm
+
+    def get_cluster_nights(self, cluster_type='kmeans', cluster_label=None):
+        """
+        Returns the nights DataFrame filtered by cluster label.
+        :param cluster_type: (str), Type of clustering to use for filtering,
+            either 'kmeans' or 'tsne'.
+        :param cluster_label: (int), Cluster label to filter by. If None,
+            returns all nights.
+        :return: DataFrame with nights for the specified cluster.
+        """
+        if cluster_label is None:
+            raise ValueError("cluster_label must be provided to filter nights.")
+        features_df = self.return_dataset_with_clusters().reset_index()
+        cluster_col = 'cluster_label' if cluster_type == 'kmeans' \
+            else 'tsne_cluster_label'
+
+        return features_df[features_df[cluster_col] ==
+                           cluster_label].set_index(['id', 'datetime'])

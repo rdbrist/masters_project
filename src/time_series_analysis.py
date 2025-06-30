@@ -192,9 +192,11 @@ def remove_zero_or_null_days(df: pd.DataFrame, value_col: str) -> pd.DataFrame:
     return df[date_mask]
 
 
-def _plot_means_for_individual(
-        df, variables, groupby_cols, x_col, x_label, title,
-        night_start, morning_end, method='mean'):
+def _plot_time_series_profile(
+        df, variables, groupby_cols, x_col, x_label, title,night_start,
+        morning_end, method='mean', rolling_window=None, y_limits: tuple = None,
+        global_min=None, global_max=None, prescaled=True):
+
     if 'hour' not in df:
         dt_index = df.index.get_level_values('datetime')
         df['hour'] = dt_index.hour
@@ -205,7 +207,8 @@ def _plot_means_for_individual(
     elif method == 'dba':
         dbaa = DBAAverager(df[variables], night_start_hour=night_start,
                            morning_end_hour=morning_end)
-        stats = dbaa.get_dba_and_variance_dataframe()
+        stats = (
+            dbaa.get_dba_and_variance_dataframe(rolling_window=rolling_window))
         if stats is None:
             logger.warning("No DBA averaged DataFrame available.")
             return
@@ -220,15 +223,22 @@ def _plot_means_for_individual(
     for var, color in zip(variables, colors):
         avg = stats[(var, method)]
         var_col = stats.get((var, 'var'), None)
+
         # Ensure var_col is a Series, not a float
         if var_col is None or np.isscalar(var_col):
             var_col = pd.Series([np.nan] * len(stats), index=stats.index)
         else:
             var_col = pd.to_numeric(var_col, errors='coerce')
-        stats[(var, 'mean_scaled')] = (avg - avg.min()) / (
-                    avg.max() - avg.min() + 1e-9)
-        stats[(var, 'std_scaled')] = np.sqrt(var_col) / (
-                    avg.max() - avg.min() + 1e-9)
+        if not prescaled:
+            min_val = global_min[var] if global_min is not None else avg.min()
+            max_val = global_max[var] if global_max is not None else avg.max()
+            stats[(var, 'mean_scaled')] = (avg - min_val) / (
+                        max_val - min_val + 1e-9)
+            stats[(var, 'std_scaled')] = np.sqrt(var_col) / (
+                        max_val - min_val + 1e-9)
+        else:
+            stats[(var, 'mean_scaled')] = avg
+            stats[(var, 'std_scaled')] = np.sqrt(var_col)
         y = stats[(var, 'mean_scaled')]
         yerr = stats[(var, 'std_scaled')]
         plt.plot(x, y, label=f'{var} {method}', color=color)
@@ -238,23 +248,33 @@ def _plot_means_for_individual(
     plt.ylabel('Scaled Value')
     plt.xlabel(x_label)
     plt.xticks(x, x_labels, rotation=90)
+    if y_limits is not None:
+        plt.ylim(y_limits)
     plt.legend()
     plt.tight_layout()
     plt.show()
 
 
-def plot_night_means_for_individual(
-    df, zip_id, variables=None, night_start=17, morning_end=11, method='mean'
-):
+def plot_night_time_series(df, zip_id=None, variables=None, night_start=17,
+                           morning_end=11, method='mean',
+                           y_limits: tuple = None, rolling_window=None,
+                            global_min=None, global_max=None, prescaled=True):
     """
-    Plot the means of specified variables for an individual during night hours.
+    Plot the means of specified variables for a group of nights during night
+    hours.
+    :param global_max: dict, optional global maximum values for each variable to scale
+    :param global_min: dict, optional global minimum values for each variable to scale
     :param df: DataFrame containing time series data with a multi-index
-    :param zip_id: int, identifier for the individual.
+    :param zip_id: int, optional identifier for the individual.
     :param variables: list of str, names of the variables to plot. If None,
         ['iob mean', 'cob mean', 'bg mean'] are used
     :param night_start: int, hour when the night starts (0-23).
     :param morning_end: int, hour when the morning ends (0-23).
     :param method: str, method to use for plotting ('mean' or 'dba').
+    :param y_limits: tuple, optional limits for the y-axis (min, max).
+    :param rolling_window: int, optional size of the rolling window for
+        smoothing
+    :param prescaled: bool, whether the data is already scaled
     :return:
     """
     if variables is None:
@@ -263,24 +283,35 @@ def plot_night_means_for_individual(
     def night_hour(hour):
         return (hour - night_start if hour >= night_start
                 else 24 - night_start + hour)
+
     df_new = df.copy()
     night_count = df_new['night_start_date'].nunique()
+    if zip_id is None:
+        title = f'Nights: {night_count}'
+    else:
+        title = f'Person {str(zip_id)}, nights: {night_count}'
     dt_index = df_new.index.get_level_values('datetime')
     df_new['hour'] = dt_index.hour
     df_new['night_hour'] = df_new['hour'].map(night_hour)
 
-    df_night = df_new[(df_new['hour'] >= night_start) |
+    df_new = df_new[(df_new['hour'] >= night_start) |
                       (df_new['hour'] < morning_end)]
-    _plot_means_for_individual(
-        df_night, variables,
-        groupby_cols=(['night_start_date', 'night_hour', 'hour', 'time']
-                      if method == 'dba' else ['night_hour', 'hour', 'time']),
+    _plot_time_series_profile(
+        df_new, variables,
+        groupby_cols=(['id', 'night_start_date', 'night_hour', 'hour', 'time']
+                      if method == 'dba'
+                      else ['id', 'night_hour', 'hour', 'time']),
         x_col='time',
         x_label='Hour',
-        title=f'Person {str(zip_id)}, nights: {night_count}',
+        title=title,
         method=method,
         night_start=night_start,
-        morning_end=morning_end
+        morning_end=morning_end,
+        y_limits=y_limits,
+        rolling_window=rolling_window,
+        global_min=global_min,
+        global_max=global_max,
+        prescaled=prescaled
     )
 
 
@@ -296,7 +327,7 @@ def plot_hourly_means_for_individual(df, zip_id, variables=None):
     if variables is None:
         variables = ['iob mean', 'cob mean', 'bg mean']
     df_new = df.copy()
-    _plot_means_for_individual(
+    _plot_time_series_profile(
         df_new, variables,
         groupby_cols=['hour'],
         x_col='hour',

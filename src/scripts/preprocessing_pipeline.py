@@ -20,7 +20,7 @@ from src.data_processing.resampling import ResampleDataFrame
 from src.config import INTERIM_DATA_DIR
 from src.helper import separate_flat_file, filter_separated_by_ids
 from src.night_clustering import NightClustering
-from src.time_series_analysis import plot_night_means_for_individual
+from src.time_series_analysis import plot_night_time_series
 
 
 def main():
@@ -146,7 +146,7 @@ def main():
     df_all_selected.to_csv(final_csv)
 
     for zip_id in candidates:
-        plot_night_means_for_individual(df_all_selected, zip_id,
+        plot_night_time_series(df_all_selected, zip_id=zip_id,
                                         night_start=night_hour,
                                         morning_end=morning_hour)
 
