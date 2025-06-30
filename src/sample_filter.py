@@ -20,7 +20,8 @@ class SampleFilter:
                  max_break_run: float = None,
                  min_nights: int = None,
                  cob_nan_min: float = 1,
-                 iob_nan_min: float = 1):
+                 iob_nan_min: float = 1,
+                 bg_nan_min: float = 1):
         """
         Initialises the SampleFilter class.
         :param night_start: (time) Time of night start, e.g. 17:00
@@ -29,6 +30,9 @@ class SampleFilter:
         :param missed_intervals: (int) Allowable missed intervals for nights
         :param max_break_run: (float) Max string of missing intervals for nights
         :param min_nights: (int) Minimum number of nights required for candidate
+        :param cob_nan_min: (float) Minimum percentage of COB NaN allowed
+        :param iob_nan_min: (float) Minimum percentage of IOB NaN allowed
+        :param bg_nan_min: (float) Minimum percentage of BG NaN allowed
         """
         if any(p is None for p in [night_start, morning_end, sampling,
                                    missed_intervals]):
@@ -45,42 +49,44 @@ class SampleFilter:
         self.max_avg_break = max_break_run
 
         config = Configuration()
+        # TODO: Add obfuscation to the offset ids or carry that out post merge
         df_offsets = read_profile_offsets_csv(config)
         df_processed = apply_and_filter_by_offsets(offsets_df=df_offsets,
                                                    interim_df=self.raw_df,
                                                    verbose=False)
         df_processed = remove_null_variable_individuals(df_processed)
         separated = separate_flat_file(df_processed)
+        self.candidates = []
+        self.nights_objects = None
+        self.night_count = 0
+        self.stats = None
         self.nights_objects = (
             create_nights_objects(separated, night_start=night_start,
                                   morning_end=morning_end,
                                   sample_rate=self.sample_rate))
+        print(f"Number of nights objects created: {len(self.nights_objects)}")
         self.apply_constraints(missed_intervals, max_break_run, min_nights,
-                               cob_nan_min, iob_nan_min)
+                               cob_nan_min, iob_nan_min, bg_nan_min)
 
     def apply_constraints(self, missed_intervals: int = None,
                           max_break_run: float = None,
                           min_nights: int = None,
-                          cob_nan_min: float = 0.1,
-                          iob_nan_min: float = 0.1):
+                          cob_nan_min: float = None,
+                          iob_nan_min: float = None,
+                          bg_nan_min: float = None):
         """
         Filters the nights by the applied constraint for each Nights object,
         such that only valid nights are retained.
-        :param missed_intervals: (int) Number of missed intervals allowed
-        :param max_break_run: (float) Maximum string of missing intervals
-        :param min_nights: (int) Minimum number of nights required for candidate
-        :param cob_nan_min: (float) Minimum percentage of COB NaN allowed
-        :param iob_nan_min: (float) Minimum percentage of IOB NaN allowed
         """
         new_nights_objs = []
         night_count = 0
-        self.candidates = []
         for nights_obj in self.nights_objects:
             new_nights_list = (
                 filter_nights(nights_obj, missed_intervals=missed_intervals,
                               max_break_run=max_break_run,
                               cob_nan_min=cob_nan_min,
-                              iob_nan_min=iob_nan_min))
+                              iob_nan_min=iob_nan_min,
+                              bg_nan_min=bg_nan_min))
             if len(new_nights_list) >= min_nights:
                 self.candidates.append(nights_obj.zip_id)
                 (new_nights_objs.

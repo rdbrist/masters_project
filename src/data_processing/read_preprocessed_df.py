@@ -91,6 +91,8 @@ def apply_and_filter_by_offsets(offsets_df: pd.DataFrame = None,
         raise ValueError("Profile offsets DataFrame contains duplicate IDs."
                          " Please ensure each ID is unique such that only"
                          " one offset exists.")
+    if interim_df is None or interim_df.empty:
+        raise ValueError("interim_df must not be None or empty.")
     if offsets_df.index.name != 'id':
         raise ValueError("Profile offsets DataFrame must have 'id' index.")
 
@@ -106,7 +108,6 @@ def apply_and_filter_by_offsets(offsets_df: pd.DataFrame = None,
         interim_df[~interim_df.index.get_level_values('id').isin(missing_ids)])
     interim_df = interim_df.reset_index()
     interim_df['offset'] = interim_df['id'].map(offsets_df['offset'])
-    print(interim_df['offset'].dtype)
     interim_df['datetime'] += interim_df['offset'] * pd.Timedelta(hours=1)
     interim_df['day'] = interim_df['datetime'].dt.date
     interim_df['time'] = interim_df['datetime'].dt.time

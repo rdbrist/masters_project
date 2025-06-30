@@ -1,3 +1,5 @@
+from typing import List, Tuple
+
 import pandas as pd
 from loguru import logger
 from matplotlib import pyplot as plt
@@ -80,7 +82,7 @@ def provide_data_statistics(night_objects: [Nights] = None) -> pd.DataFrame:
     return df_overall_stats
 
 
-def create_nights_objects(separated: (int, pd.DataFrame) = None,
+def create_nights_objects(separated: List[Tuple[int, pd.DataFrame]] = None,
                           sample_rate: int = None,
                           night_start: time = None,
                           morning_end: time = None) -> [Nights]:
@@ -93,6 +95,8 @@ def create_nights_objects(separated: (int, pd.DataFrame) = None,
     :param morning_end: Time when the night ends
     :return: List of Nights objects
     """
+    if separated is None or separated == []:
+        raise TypeError('separated argument cannot be None or empty')
     nights_objects = []
     for id_val, df_individual in separated:
         nights = Nights(zip_id=id_val,

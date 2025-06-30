@@ -162,6 +162,7 @@ class Nights:
                          pd.notna(d['bg_iqr'])]
         cob_nans = sum(d['cob_nans'] for d in self.stats_per_night)
         iob_nans = sum(d['iob_nans'] for d in self.stats_per_night)
+        bg_nans = sum(d['bg_nans'] for d in self.stats_per_night)
         return {
             'count_of_nights': count_of_nights,
             'complete_nights':
@@ -196,10 +197,13 @@ class Nights:
                 np.nanmedian(bg_iqr_values) if bg_iqr_values else np.nan,
             'total_cob_nans': cob_nans,
             'total_iob_nans': iob_nans,
+            'total_bg_nans': bg_nans,
             'cob_nan_ratio':
                 cob_nans / count_of_nights * self.total_intervals(),
             'iob_nan_ratio':
                 iob_nans / count_of_nights * self.total_intervals(),
+            'bg_nan_ratio':
+                bg_nans / count_of_nights * self.total_intervals(),
             'missed_interval_vectors':
                 [d['missed_interval_vector'] for d in self.stats_per_night],
         }
@@ -254,6 +258,7 @@ class Nights:
             bg_night_mean = bg.mean()
             cob_nans = night_df['cob mean'].isna().sum()
             iob_nans = night_df['iob mean'].isna().sum()
+            bg_nans = night_df['bg mean'].isna().sum()
             stats.append({
                 'night_date': date,
                 'num_intervals': num_intervals,
@@ -271,8 +276,10 @@ class Nights:
                 'bg_zscore': (bg_night_mean - self.bg_mean) / self.bg_std,
                 'cob_nans': cob_nans,
                 'iob_nans': iob_nans,
+                'bg_nans': bg_nans,
                 'cob_nan_ratio': cob_nans / num_intervals,
                 'iob_nan_ratio': iob_nans / num_intervals,
+                'bg_nan_ratio': bg_nans / num_intervals,
             })
 
         return stats
@@ -449,7 +456,8 @@ class Nights:
 def filter_nights(nights: Nights, missed_intervals: int,
                   max_break_run: float,
                   cob_nan_min: float,
-                  iob_nan_min: float) -> (
+                  iob_nan_min: float,
+                  bg_nan_min: float) -> (
         List[Tuple[datetime.date, pd.DataFrame]]):
     """
     Returns a list of only the nights within the number of missing intervals
@@ -460,13 +468,15 @@ def filter_nights(nights: Nights, missed_intervals: int,
     :param max_break_run: Maximum string of missing intervals
     :param cob_nan_min: Minimum percentage of COB NaN allowed
     :param iob_nan_min: Minimum percentage of IOB NaN allowed
+    :param bg_nan_min: Minimum percentage of BG NaN allowed
     :return: List of objects with shape (id, [night_df, ...])
     """
     night_dates = [s['night_date'] for s in nights.stats_per_night
                    if s['missed_intervals'] <= missed_intervals and
                    s['max_break_run'] <= max_break_run and
                    s['cob_nan_ratio'] <= cob_nan_min and
-                   s['iob_nan_ratio'] <= iob_nan_min]
+                   s['iob_nan_ratio'] <= iob_nan_min and
+                   s['bg_nan_ratio'] <= bg_nan_min]
     filtered_nights = [
         (night_date, night_df) for night_date, night_df in nights.nights
         if night_date in night_dates]

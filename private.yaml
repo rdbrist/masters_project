@@ -21,4 +21,4 @@ treat_timezone : 'localise'
 limit_to_2023_subset : TRUE
 
 # This property sets whether the ids in the data should be anonymised or not.
-obfuscate_ids : TRUE
+obfuscate_ids : FALSE

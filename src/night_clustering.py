@@ -33,6 +33,10 @@ class NightClustering:
         """
         df = check_df_index(df)
 
+        if df.isna().sum().sum() != 0:
+            raise ValueError("Input DataFrame contains NaN values. "
+                             "Please handle missing data before clustering.")
+
         self.df = df.copy()
         self.variable_cols = [col for col in df.columns if col not in
                               ['id', 'datetime']]
@@ -97,6 +101,18 @@ class NightClustering:
                     'longest_strike_below_mean': None,
                     'longest_strike_above_mean': None
                 },
+                'iob max': {
+                    'count_above': [{'t': 100}],
+                    'maximum': None,
+                    'minimum': None,
+                    'median': None,
+                    'standard_deviation': None,
+                    'root_mean_square': None,
+                    'first_location_of_maximum': None,
+                    'last_location_of_maximum': None,
+                    'first_location_of_minimum': None,
+                    'last_location_of_minimum': None,
+                },
                 'cob mean': {
                     'mean': None,
                     'variance': None,
@@ -112,6 +128,18 @@ class NightClustering:
                     'sample_entropy': None,
                     'longest_strike_below_mean': None,
                     'longest_strike_above_mean': None
+                },
+                'cob max': {
+                    'count_above': [{'t': 100}],
+                    'maximum': None,
+                    'minimum': None,
+                    'median': None,
+                    'standard_deviation': None,
+                    'root_mean_square': None,
+                    'first_location_of_maximum': None,
+                    'last_location_of_maximum': None,
+                    'first_location_of_minimum': None,
+                    'last_location_of_minimum': None,
                 },
                 'bg mean': {
                     'mean': None,
@@ -136,8 +164,7 @@ class NightClustering:
                     'longest_strike_above_mean': None,
                     'mean_abs_change': None,
                 },
-                'cob max': {
-                    'count_above': [{'t': 100}],
+                'bg max': {
                     'maximum': None,
                     'minimum': None,
                     'median': None,
@@ -148,8 +175,7 @@ class NightClustering:
                     'first_location_of_minimum': None,
                     'last_location_of_minimum': None,
                 },
-                'iob max': {
-                    'count_above': [{'t': 100}],
+                'bg min': {
                     'maximum': None,
                     'minimum': None,
                     'median': None,
@@ -159,7 +185,7 @@ class NightClustering:
                     'last_location_of_maximum': None,
                     'first_location_of_minimum': None,
                     'last_location_of_minimum': None,
-                }
+                },
             }
             return None
         else:
@@ -223,12 +249,17 @@ class NightClustering:
         X_imputed = X_imputed.loc[:, X_imputed.var() != 0]
 
         self.scaler = StandardScaler()
+        unscaled_cols = set(self.night_features_df.columns)
         self.scaled_night_features = self.scaler.fit_transform(X_imputed)
+        print(type(self.scaled_night_features))
         self.scaled_night_features = pd.DataFrame(
             self.scaled_night_features,
             columns=X_imputed.columns,
             index=X_imputed.index
         )
+        scaled_cols = set(self.scaled_night_features.columns)
+        print(f"Dropped features from scaling: "
+              f"{unscaled_cols.difference(scaled_cols)}")
 
         if n_components is not None:
             self.pca_model = PCA(n_components=n_components)
@@ -448,6 +479,8 @@ class NightClustering:
     def heatmap_cluster_features(self, cluster_type='kmeans'):
         """
         Visualizes the mean features for each cluster as a heatmap.
+        The heatmap color is based on scaled features, but the annotation
+        overlays show the unscaled feature means.
         :param cluster_type: (str) Defines which clusters to use
         """
         if self.night_features_df is None:
@@ -456,12 +489,25 @@ class NightClustering:
         clusters = (self.night_clusters if cluster_type == 'kmeans'
                     else self.tsne_clusters)
 
-        heatmap_data = self.scaled_night_features.copy()
-        heatmap_data['cluster_label'] = clusters
-        heatmap_data = heatmap_data.groupby('cluster_label').mean().T
+        # Scaled features for heatmap color
+        scaled = self.scaled_night_features.copy()
+        scaled['cluster_label'] = clusters
+        heatmap_data = scaled.groupby('cluster_label').mean().T
+
+        # Unscaled features and ensure the shapes match for annotation overlay
+        unscaled = self.night_features_df.copy()
+
+        unscaled['cluster_label'] = clusters
+        unscaled = unscaled[scaled.columns]
+        annot_data = unscaled.groupby('cluster_label').mean().T
+        # Format annotation values for better readability
+        annot_fmt = annot_data.round(2).astype(str)
+
         plt.figure(figsize=(6, 14))
-        sns.heatmap(heatmap_data, annot=True, cmap='Spectral', center=0)
-        plt.title('Cluster Centroids: Feature Means')
+        sns.heatmap(heatmap_data, annot=annot_fmt, fmt='', cmap='Spectral',
+                    center=0)
+        plt.title('Cluster Centroids: Scaled Feature Means (Unscaled Means '
+                  'Overlay)')
         plt.xlabel('Cluster', verticalalignment='top')
         plt.ylabel('Feature')
         plt.show()
@@ -483,11 +529,10 @@ class NightClustering:
         for col in cluster_cols:
             if col in features.columns:
                 features = features.drop(columns=col)
-        features_scaled = StandardScaler().fit_transform(features)
 
         tsne = TSNE(n_components=2, perplexity=perplexity, max_iter=max_iter,
                     random_state=42)
-        self.tsne_results = tsne.fit_transform(features_scaled)
+        self.tsne_results = tsne.fit_transform(self.scaled_night_features)
 
         return self.tsne_results
 
