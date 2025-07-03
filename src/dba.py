@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, time
 from tslearn.barycenters import dtw_barycenter_averaging
 from tslearn.utils import to_time_series_dataset
 from src.helper import get_night_start_date
@@ -26,7 +26,6 @@ class DBAAverager:
         self.dba_averaged_dataframe = None
 
         night_profiles = self._get_night_profiles()
-        print(f'Night profiles: {len(night_profiles)}')
         if night_profiles:
             night_profiles = [
                 np.where(pd.isna(profile), np.nan, profile) for profile in
@@ -106,7 +105,10 @@ class DBAAverager:
         return [(datetime.min + td).time() for td in evening.append(morning)]
 
     def _get_night_profiles(self):
-        """Extract and align night profiles from the DataFrame."""
+        """
+        Extract and align night profiles from the DataFrame.
+        :return: (list) List of arrays of variable values for a night dataframe
+        """
         df_reset = self.df.reset_index()
         df_reset['night_start_date'] = (
             get_night_start_date(df_reset['datetime'], self.night_start_hour))
@@ -131,3 +133,25 @@ class DBAAverager:
                         series.interpolate(method='linear',
                                            limit_direction='both').values)
         return X
+
+def get_dba_and_variance(df: pd.DataFrame,
+                         night_start: time = None,
+                         morning_end: time = None,
+                         rolling_window: int = None) -> pd.DataFrame:
+    """
+    Create dataframe that averages using DBA and produces variance either
+    point-in-time or using a rolling window.
+    :param df: (pd.DataFrame) DataFrame with datetime index and time series
+        columns
+    :param night_start: (datetime.time) Night start time
+    :param morning_end: (datetime.time) Night end time
+    :param rolling_window: (int) Number of intervals for the rolling window or
+        do not set to leave as point-in-time
+    :return: (pd.DataFrame) DataFrame
+    """
+    # print(df.index.dtype)
+    # if not np.issubdtype(df.index.dtype, np.datetime64):
+    #     raise TypeError('Index must be single level DatetimeIndex')
+    dba = DBAAverager(df, night_start, morning_end)
+    return dba.get_dba_and_variance_dataframe(rolling_window=rolling_window)
+

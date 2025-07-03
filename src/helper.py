@@ -212,8 +212,8 @@ def get_night_start_date(
     elif isinstance(x, list):
         x = pd.Series(pd.to_datetime(x))
     if not isinstance(x, pd.Series):
-        raise ValueError("Input must be a pd.Series, pd.DatetimeIndex, "
-                         "np.ndarray, or list.")
+        raise ValueError(f"Input is type {type(x)} and must be a pd.Series, "
+                         f"pd.DatetimeIndex, np.ndarray, or list.")
     night_start = x.dt.floor('D') + pd.Timedelta(hours=night_start_hour)
     night_start[x.dt.hour < night_start_hour] -= pd.Timedelta(days=1)
     return night_start.dt.date

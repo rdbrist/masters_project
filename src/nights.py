@@ -24,7 +24,12 @@ class Nights:
                  morning_end: time = None,
                  sample_rate: int = None):
         if not isinstance(df.index, pd.DatetimeIndex):
-            raise ValueError("DataFrame index must be a DatetimeIndex.")
+            try:
+                df.index = pd.to_datetime(df.index, errors='raise')
+            except TypeError:
+                TypeError('DataFrame index is not pd.DateTimeIndex and cannot '
+                          'be converted')
+            #raise ValueError("DataFrame index must be a DatetimeIndex.")
         if zip_id is None and sample_rate is None:
             raise ValueError("zip_id and sample_rate must be provided.")
         self.zip_id = zip_id
@@ -252,8 +257,8 @@ class Nights:
             max_break_duration = breaks.max() if num_breaks > 0 else 0
             total_break_duration = breaks.sum() if num_breaks > 0 else 0
 
-            if night_df['bg mean'].dtype != 'Float32':
-                print(self.zip_id)
+            # if night_df['bg mean'].dtype != 'Float32':
+            #     print(self.zip_id)
             bg = night_df['bg mean'].astype(float)
             bg_night_mean = bg.mean()
             cob_nans = night_df['cob mean'].isna().sum()
