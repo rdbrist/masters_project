@@ -37,7 +37,7 @@ class NightClustering:
             raise ValueError("Input DataFrame contains NaN values. "
                              "Please handle missing data before clustering.")
 
-        self.df = df.copy()
+        self.df = df.sort_index().copy()
         self.variable_cols = [col for col in df.columns if col not in
                               ['id', 'datetime']]
         self.customised_feature_dict = None
@@ -55,6 +55,9 @@ class NightClustering:
         # Store scalers and PCA models
         self.scaler = None
         self.pca_model = None
+
+        self.before_hash = None
+        self.after_hash = None
 
     def get_unique_ids(self):
         """
@@ -185,13 +188,13 @@ class NightClustering:
                              "'comprehensive', 'efficient', 'minimal', or "
                              "'custom'.")
 
-    def extract_night_level_features(self):
+    def extract_night_level_features(self, multi_threaded=True):
         """
         Extracts aggregated tsfresh features for each complete night period.
         The MultiIndex needs a unique 'night_id' for each night (e.g., id +
         night start date).
-        :param night_start_hour: (int), hour at which the night period starts
-            (e.g., 19 for 19:00).
+        :param multi_threaded: (bool), If True, uses multi-threading for feature
+
         """
         temp_df = self.df.reset_index()
         night_start_date = (
@@ -206,8 +209,11 @@ class NightClustering:
                                    value_vars=self.variable_cols,
                                    var_name=column_kind,
                                    value_name=value_name)
+        temp_df_sorted = (
+            temp_df.sort_values(['night_id', 'datetime']).drop(columns='id'))
+        n_jobs = 1 if multi_threaded else 0
         self.night_features_df = extract_features(
-            temp_df.drop(columns='id'),
+            temp_df_sorted,
             column_id='night_id',
             column_sort='datetime',
             column_kind=column_kind,
@@ -215,7 +221,8 @@ class NightClustering:
             kind_to_fc_parameters=self.customised_feature_dict,
             default_fc_parameters=self.feature_settings,
             impute_function=impute,
-            show_warnings=True
+            show_warnings=True,
+            n_jobs=n_jobs
             )
 
         print(f"Extracted {self.night_features_df.shape[1]} features for "
@@ -243,7 +250,6 @@ class NightClustering:
         self.scaler = StandardScaler()
         unscaled_cols = set(self.night_features_df.columns)
         self.scaled_night_features = self.scaler.fit_transform(X_imputed)
-        print(type(self.scaled_night_features))
         self.scaled_night_features = pd.DataFrame(
             self.scaled_night_features,
             columns=X_imputed.columns,
@@ -399,7 +405,6 @@ class NightClustering:
         df['date'] = pd.to_datetime(df['date'])
         df['id'] = df['id'].astype(int)
         df = df.drop('index', axis=1).set_index(['id', 'date'])
-
         return df
 
     def return_dataset_with_clusters(self, df: pd.DataFrame = None,

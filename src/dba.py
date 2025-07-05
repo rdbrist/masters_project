@@ -149,9 +149,6 @@ def get_dba_and_variance(df: pd.DataFrame,
         do not set to leave as point-in-time
     :return: (pd.DataFrame) DataFrame
     """
-    # print(df.index.dtype)
-    # if not np.issubdtype(df.index.dtype, np.datetime64):
-    #     raise TypeError('Index must be single level DatetimeIndex')
     dba = DBAAverager(df, night_start, morning_end)
     return dba.get_dba_and_variance_dataframe(rolling_window=rolling_window)
 
