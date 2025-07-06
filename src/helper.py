@@ -217,3 +217,17 @@ def get_night_start_date(
     night_start = x.dt.floor('D') + pd.Timedelta(hours=night_start_hour)
     night_start[x.dt.hour < night_start_hour] -= pd.Timedelta(days=1)
     return night_start.dt.date
+
+def minutes_since_night_start(t, night_start):
+    """
+    Calculate the number of minutes since the night start time for a given
+    datetime object, t.
+    :param t: (datetime) The datetime object for which to calculate the minutes
+    :param night_start: (datetime.time) The time at which the night starts
+    :return: (int) The number of minutes since the night start time
+    """
+    t_minutes = t.hour * 60 + t.minute
+    start_minutes = night_start.hour * 60 + night_start.minute
+    if t < night_start:
+        t_minutes += 24 * 60
+    return t_minutes - start_minutes
