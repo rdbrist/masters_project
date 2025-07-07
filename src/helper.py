@@ -3,6 +3,8 @@
 # calculates a df of all the different read records
 import dataclasses
 import glob
+from datetime import time
+
 import pandas as pd
 import numpy as np
 from scipy.stats import skew, kurtosis
@@ -194,7 +196,9 @@ def get_night_start_date(
         x: Union[pd.DatetimeIndex, pd.Series, np.array, list] = None,
         night_start_hour: int = None) -> pd.Series:
     """
-    Get the night start date for each timestamp in the input series or array.
+    Get the night start date for each timestamp in the input series or array and
+    return it as a series of the same length as the input, where a DatetimeIndex
+    or Series is expected.
     :param x: Union[pd.DatetimeIndex, pd.Series, np.array, list]
         Input timestamps from which to derive the night start date.
     :param night_start_hour: (int) Hour of the night start (0-23).
@@ -205,18 +209,33 @@ def get_night_start_date(
         print(x)
         raise ValueError("Input timestamps and night start hour must not be "
                          "None.")
-    if isinstance(x, pd.DatetimeIndex):
-        x = pd.Series(x)
-    elif isinstance(x, np.ndarray):
-        x = pd.Series(pd.to_datetime(x))
-    elif isinstance(x, list):
-        x = pd.Series(pd.to_datetime(x))
-    if not isinstance(x, pd.Series):
+
+    if isinstance(x, pd.Series):
+        s = pd.to_datetime(x)
+    elif isinstance(x, pd.DatetimeIndex):
+        s = pd.Series(x, index=x)
+    elif isinstance(x, (np.ndarray, list)):
+        s = pd.Series(pd.to_datetime(x))
+    else:
         raise ValueError(f"Input is type {type(x)} and must be a pd.Series, "
                          f"pd.DatetimeIndex, np.ndarray, or list.")
-    night_start = x.dt.floor('D') + pd.Timedelta(hours=night_start_hour)
-    night_start[x.dt.hour < night_start_hour] -= pd.Timedelta(days=1)
-    return night_start.dt.date
+
+    night_start = s.dt.floor('D') + pd.Timedelta(hours=night_start_hour)
+    night_start[s.dt.hour < night_start_hour] -= pd.Timedelta(days=1)
+    return pd.Series(night_start.dt.date, index=s.index)
+
+    # if isinstance(x, pd.DatetimeIndex):
+    #     x = pd.Series(x)
+    # elif isinstance(x, np.ndarray):
+    #     x = pd.Series(pd.to_datetime(x))
+    # elif isinstance(x, list):
+    #     x = pd.Series(pd.to_datetime(x))
+    # if not isinstance(x, pd.Series):
+    #     raise ValueError(f"Input is type {type(x)} and must be a pd.Series, "
+    #                      f"pd.DatetimeIndex, np.ndarray, or list.")
+    # night_start = x.dt.floor('D') + pd.Timedelta(hours=night_start_hour)
+    # night_start[x.dt.hour < night_start_hour] -= pd.Timedelta(days=1)
+    # return night_start.dt.date
 
 def minutes_since_night_start(t, night_start):
     """
@@ -231,3 +250,15 @@ def minutes_since_night_start(t, night_start):
     if t < night_start:
         t_minutes += 24 * 60
     return t_minutes - start_minutes
+
+def rank_minutes_series(series: pd.Series, night_start: time) -> pd.Series:
+    """
+    Rank the minutes intervals for the purpose of using the ranking for ordering
+    of times in plot axes.
+    :param series: (pd.Series) Series containing datetime objects.
+    :param night_start: (datetime.time) The time at which the night starts.
+    :return: (pd.Series) Series containing datetime objects.
+    """
+    minutes_since_start = series.apply(lambda t: minutes_since_night_start(t, night_start))
+    rank = minutes_since_start.rank(method='dense').astype(int)
+    return pd.Series(rank, index=series.index)

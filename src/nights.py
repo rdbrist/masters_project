@@ -37,8 +37,13 @@ class Nights:
         self.df = df.sort_index()
         self.night_start = night_start
         self.morning_end = morning_end
-        self.df['night_start_date'] = (
-            get_night_start_date(self.df.index, night_start.hour))
+        if not isinstance(self.df.index,
+                          pd.DatetimeIndex) or self.df.index.hasnans:
+            raise ValueError(
+                "DataFrame index must be a valid DatetimeIndex with no NaT values.")
+        # self.df['night_start_date'] = (
+        #     get_night_start_date(self.df.index, night_start.hour))
+
         self.nights = self._split_nights()
         self._calculate_stats()
 
@@ -515,7 +520,6 @@ def consolidate_df_from_nights(
     consolidated_df = pd.DataFrame()
     for nights in nights_objects:
         for night_start_date, night_df in nights.nights:
-            # Ensure the index is a DatetimeIndex
             if not isinstance(night_df.index, pd.DatetimeIndex):
                 raise ValueError("Night DataFrame index must be a "
                                  "DatetimeIndex.")
