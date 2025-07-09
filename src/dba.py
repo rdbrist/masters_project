@@ -152,3 +152,18 @@ def get_dba_and_variance(df: pd.DataFrame,
     dba = DBAAverager(df, night_start, morning_end)
     return dba.get_dba_and_variance_dataframe(rolling_window=rolling_window)
 
+def dba_by_cluster(df, variables, night_start_hour, morning_end_hour,
+                   cluster_col='cluster'):
+    cluster_dba_dfs = {}
+    df_long = pd.DataFrame(columns=['cluster', 'time', 'bg mean'])
+    df_long = df_long.astype({'cluster': 'int', 'time': 'str',
+                              'bg mean': 'float'})
+    col = ('bg mean', 'dba')
+    for c, df_c in df.groupby(cluster_col):
+        df_dba = get_dba_and_variance(df_c[variables], night_start_hour,
+                                      morning_end_hour, rolling_window=3)
+        cluster_dba_dfs[c] = df_dba
+        data = {'cluster': c, 'time': df_dba['time'].astype(str),
+                'bg mean': df_dba[col]}
+        df_long = pd.concat([df_long, pd.DataFrame(data)])
+    return df_long
