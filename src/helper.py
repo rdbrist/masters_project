@@ -3,7 +3,7 @@
 # calculates a df of all the different read records
 import dataclasses
 import glob
-from datetime import time
+from datetime import time, datetime, timedelta
 
 import pandas as pd
 import numpy as np
@@ -224,19 +224,6 @@ def get_night_start_date(
     night_start[s.dt.hour < night_start_hour] -= pd.Timedelta(days=1)
     return pd.Series(night_start.dt.date, index=s.index)
 
-    # if isinstance(x, pd.DatetimeIndex):
-    #     x = pd.Series(x)
-    # elif isinstance(x, np.ndarray):
-    #     x = pd.Series(pd.to_datetime(x))
-    # elif isinstance(x, list):
-    #     x = pd.Series(pd.to_datetime(x))
-    # if not isinstance(x, pd.Series):
-    #     raise ValueError(f"Input is type {type(x)} and must be a pd.Series, "
-    #                      f"pd.DatetimeIndex, np.ndarray, or list.")
-    # night_start = x.dt.floor('D') + pd.Timedelta(hours=night_start_hour)
-    # night_start[x.dt.hour < night_start_hour] -= pd.Timedelta(days=1)
-    # return night_start.dt.date
-
 def minutes_since_night_start(t, night_start):
     """
     Calculate the number of minutes since the night start time for a given
@@ -259,6 +246,20 @@ def rank_minutes_series(series: pd.Series, night_start: time) -> pd.Series:
     :param night_start: (datetime.time) The time at which the night starts.
     :return: (pd.Series) Series containing datetime objects.
     """
-    minutes_since_start = series.apply(lambda t: minutes_since_night_start(t, night_start))
+    minutes_since_start = (
+        series.apply(lambda t: minutes_since_night_start(t, night_start)))
     rank = minutes_since_start.rank(method='dense').astype(int)
     return pd.Series(rank, index=series.index)
+
+def normalise_overnight_time(dt_obj, split_hour=6):
+    """
+    Normalises a datetime object to a single reference date, handling overnight
+    periods. Times before `split_hour` (e.g., 6 AM) are moved to the next day
+    relative to the reference.
+    """
+    reference_date = datetime(2000, 1, 1)
+    if dt_obj.time() >= time(split_hour, 0, 0):
+        return datetime.combine(reference_date, dt_obj.time())
+    else:
+        return datetime.combine(reference_date + timedelta(days=1),
+                                dt_obj.time())

@@ -163,6 +163,29 @@ class FeatureSet:
             cos_transformer(24).fit_transform(self.df['hour_of_day']))
         self.new_feature_cols.extend(['hour_of_day', 'hour_sin', 'hour_cos'])
 
+    def add_excursion_features(self):
+        """
+        Adds features for excursions based on level 1 and level 2 hypo/hyper
+        glycaemic thresholds. Level 1 is defined as a low threshold of 70 mg/dL
+        and a high threshold of 180 mg/dL. Level 2 is defined as a low threshold
+        of 54 mg/dL and a high threshold of 250 mg/dL.
+        """
+        l1_low, l1_high = 70, 180
+        l2_low, l2_high = 54, 250
+        self.df['l1_hypo'] = 1 if self.df['bg min'] < l1_low else 0
+        self.df['l1_hyper'] = 1 if self.df['bg max'] > l1_high else 0
+        self.df['l2_hypo'] = 1 if self.df['bg min'] < l2_low else 0
+        self.df['l2_hyper'] = 1 if self.df['bg max'] > l2_high else 0
+        self.new_feature_cols.extend(['l1_hypo', 'l1_hyper', 'l2_hypo', 'l2_hyper'])
+
+    def add_mage_features(self):
+        """
+        Adds features for Mean Amplitude of Glycemic Excursion (MAGE) based on
+        the standard deviation of the mean glucose levels.
+        """
+        self.df['mage'] = (self.df['bg max'] - self.df['bg min']) / 2
+        self.new_feature_cols.append('mage')
+
     def get_all_features(self):
         """
         Adds all features to the DataFrame and returns the updated DataFrame

@@ -154,6 +154,11 @@ def get_dba_and_variance(df: pd.DataFrame,
 
 def dba_by_cluster(df, variables, night_start_hour, morning_end_hour,
                    cluster_col='cluster'):
+
+    def format_time_to_hhmm(time_obj):
+        """Formats a datetime.time object to HH:MM string."""
+        return time_obj.strftime('%H:%M')
+
     cluster_dba_dfs = {}
     df_long = pd.DataFrame(columns=['cluster', 'time', 'bg mean'])
     df_long = df_long.astype({'cluster': 'int', 'time': 'str',
@@ -163,7 +168,7 @@ def dba_by_cluster(df, variables, night_start_hour, morning_end_hour,
         df_dba = get_dba_and_variance(df_c[variables], night_start_hour,
                                       morning_end_hour, rolling_window=3)
         cluster_dba_dfs[c] = df_dba
-        data = {'cluster': c, 'time': df_dba['time'].astype(str),
+        data = {'cluster': c, 'time': df_dba['time'].apply(format_time_to_hhmm),
                 'bg mean': df_dba[col]}
         df_long = pd.concat([df_long, pd.DataFrame(data)])
     return df_long
