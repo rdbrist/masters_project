@@ -10,6 +10,7 @@ from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller
 from src.dba import DBAAverager
+from src.features import FeatureSet
 
 
 def split_ts(y: pd.DataFrame, ratio: float) -> (
@@ -195,17 +196,24 @@ def remove_zero_or_null_days(df: pd.DataFrame, value_col: str) -> pd.DataFrame:
 def _plot_time_series_profile(
         df, variables, groupby_cols, x_col, x_label, title,night_start,
         morning_end, method='mean', rolling_window=None, y_limits: tuple = None,
-        global_min=None, global_max=None, prescaled=True):
+        global_min=None, global_max=None, prescaled=True,
+        excursion_variable: str = None, excursion_plot_type='markers',
+        excursion_color='red', excursion_label='Excursions'):
 
     if 'hour' not in df:
         dt_index = df.index.get_level_values('datetime')
         df['hour'] = dt_index.hour
 
     if method == 'mean':
+        agg_variables = variables.copy()
+        if excursion_variable and excursion_variable in df.columns:
+            agg_variables.append(excursion_variable)
         stats = (df.groupby(groupby_cols)[variables].
                  agg(['mean', 'var']).reset_index())
     elif method == 'dba':
-        dbaa = DBAAverager(df[variables], night_start_hour=night_start,
+        dbaa = DBAAverager(df[variables + (
+            [excursion_variable] if excursion_variable else [])],
+                           night_start_hour=night_start,
                            morning_end_hour=morning_end)
         stats = (
             dbaa.get_dba_and_variance_dataframe(rolling_window=rolling_window))
@@ -218,31 +226,106 @@ def _plot_time_series_profile(
     x = stats[x_col].astype(str)
     x_labels = stats['time'].apply(lambda t: t.strftime('%H:%M'))
     plt.figure(figsize=(10, 4))
-    colors = ['tab:blue', 'tab:orange', 'tab:green']
+    colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:purple', 'tab:brown']
 
-    for var, color in zip(variables, colors):
+    # for var, color in zip(variables, colors):
+    #     avg = stats[(var, method)]
+    #     var_col = stats.get((var, 'var'), None)
+    #
+    #     # Ensure var_col is a Series, not a float
+    #     if var_col is None or np.isscalar(var_col):
+    #         var_col = pd.Series([np.nan] * len(stats), index=stats.index)
+    #     else:
+    #         var_col = pd.to_numeric(var_col, errors='coerce')
+    #     if not prescaled:
+    #         min_val = global_min[var] if global_min is not None else avg.min()
+    #         max_val = global_max[var] if global_max is not None else avg.max()
+    #         stats[(var, 'mean_scaled')] = (avg - min_val) / (
+    #                     max_val - min_val + 1e-9)
+    #         stats[(var, 'std_scaled')] = np.sqrt(var_col) / (
+    #                     max_val - min_val + 1e-9)
+    #     else:
+    #         stats[(var, 'mean_scaled')] = avg
+    #         stats[(var, 'std_scaled')] = np.sqrt(var_col)
+    #     y = stats[(var, 'mean_scaled')]
+    #     yerr = stats[(var, 'std_scaled')]
+    #     plt.plot(x, y, label=f'{var} {method}', color=color)
+    #     plt.fill_between(x, y - yerr, y + yerr, color=color, alpha=0.2)
+
+    # Plot mean variables
+    for i, var in enumerate(variables):
         avg = stats[(var, method)]
         var_col = stats.get((var, 'var'), None)
 
-        # Ensure var_col is a Series, not a float
         if var_col is None or np.isscalar(var_col):
             var_col = pd.Series([np.nan] * len(stats), index=stats.index)
         else:
             var_col = pd.to_numeric(var_col, errors='coerce')
+
         if not prescaled:
-            min_val = global_min[var] if global_min is not None else avg.min()
-            max_val = global_max[var] if global_max is not None else avg.max()
-            stats[(var, 'mean_scaled')] = (avg - min_val) / (
-                        max_val - min_val + 1e-9)
-            stats[(var, 'std_scaled')] = np.sqrt(var_col) / (
-                        max_val - min_val + 1e-9)
+            min_val = global_min[
+                var] if global_min is not None and var in global_min else avg.min()
+            max_val = global_max[
+                var] if global_max is not None and var in global_max else avg.max()
+
+            # Avoid division by zero if range is 0
+            range_val = (max_val - min_val)
+            if range_val == 0:
+                stats[
+                    (var, 'mean_scaled')] = 0.0  # or 1.0 if all values are max
+                stats[(var, 'std_scaled')] = 0.0
+            else:
+                stats[(var, 'mean_scaled')] = (avg - min_val) / range_val
+                stats[(var, 'std_scaled')] = np.sqrt(var_col) / range_val
         else:
             stats[(var, 'mean_scaled')] = avg
             stats[(var, 'std_scaled')] = np.sqrt(var_col)
+
         y = stats[(var, 'mean_scaled')]
         yerr = stats[(var, 'std_scaled')]
-        plt.plot(x, y, label=f'{var} {method}', color=color)
-        plt.fill_between(x, y - yerr, y + yerr, color=color, alpha=0.2)
+
+        # Plot the main variable line
+        plt.plot(x, y, label=f'{var} {method}', color=colors[i % len(colors)],
+                 linewidth=2)
+        # Fill between for variability
+        plt.fill_between(x, y - yerr, y + yerr, color=colors[i % len(colors)],
+                         alpha=0.2)
+
+    # Plot Excursion Data
+    if excursion_variable and excursion_variable in stats.columns.get_level_values(
+            0):
+        # The excursion variable is likely not scaled in the same way as bg mean, etc.
+        # It's an amplitude or a flag. We should plot it on a secondary axis or
+        # use markers on the primary axis, depending on its nature.
+
+        # Get the averaged excursion data
+        avg_excursion = stats[(excursion_variable, method)]
+
+        # If it's a binary flag, we might want to plot it as markers
+        if excursion_plot_type == 'markers':
+            # Find points where the average excursion flag is above a certain threshold (e.g., 0.1 for binary)
+            # or where amplitude is non-zero (for amplitude modes)
+            excursion_points_x = x[
+                avg_excursion > 0.05]  # Threshold to show where excursions are frequent
+            excursion_points_y = y[
+                avg_excursion > 0.05]  # Use the 'bg mean' y-value for positioning
+
+            # Plot markers at the corresponding 'bg mean' level
+            plt.scatter(excursion_points_x, excursion_points_y,
+                        marker='o', s=50, color=excursion_color,
+                        edgecolor='black',
+                        label=excursion_label,
+                        zorder=5)  # zorder to ensure markers are on top
+        elif excursion_plot_type == 'line':
+            # Plot as a separate line, possibly on a secondary y-axis if scales differ greatly
+            # For simplicity, plotting on primary axis for now. If scaling is an issue,
+            # a secondary y-axis (ax2 = plt.twinx()) would be needed.
+            plt.plot(x, avg_excursion, label=excursion_label,
+                     color=excursion_color, linestyle='--', linewidth=1.5)
+        elif excursion_plot_type == 'area':
+            # Fill area for amplitude
+            plt.fill_between(x, 0, avg_excursion, color=excursion_color,
+                             alpha=0.3, label=excursion_label)
 
     plt.title(title)
     plt.ylabel('Scaled Value')
@@ -258,10 +341,14 @@ def _plot_time_series_profile(
 def plot_night_time_series(df, zip_id=None, variables=None, night_start=17,
                            morning_end=11, method='mean',
                            y_limits: tuple = None, rolling_window=None,
-                            global_min=None, global_max=None, prescaled=True):
+                            global_min=None, global_max=None, prescaled=True,
+                           include_excursions: bool = False,
+                           excursion_plot_type='markers'):
     """
     Plot the means of specified variables for a group of nights during night
     hours.
+    :param excursion_plot_type: str, type of plot for excursions,
+    :param include_excursions: bool, whether to include excursions in the plot.
     :param global_max: dict, optional global maximum values for each variable to scale
     :param global_min: dict, optional global minimum values for each variable to scale
     :param df: DataFrame containing time series data with a multi-index
@@ -285,7 +372,10 @@ def plot_night_time_series(df, zip_id=None, variables=None, night_start=17,
                 else 24 - night_start + hour)
 
     df_new = df.copy()
-    night_count = df_new['night_start_date'].nunique()
+
+    night_count = len(df_new.
+                      reset_index()[['id','night_start_date']].
+                      drop_duplicates())
     if zip_id is None:
         title = f'Nights: {night_count}'
     else:
@@ -296,6 +386,13 @@ def plot_night_time_series(df, zip_id=None, variables=None, night_start=17,
 
     df_new = df_new[(df_new['hour'] >= night_start) |
                       (df_new['hour'] < morning_end)]
+
+    excursion_var_to_plot = None
+    if include_excursions and 'excursion_amplitude' not in df_new.columns:
+        raise ValueError('Excursion variable not found in variables.')
+    elif include_excursions:
+        excursion_var_to_plot = 'excursion_amplitude'
+
     _plot_time_series_profile(
         df_new, variables,
         groupby_cols=(['id', 'night_start_date', 'night_hour', 'hour', 'time']
@@ -311,7 +408,9 @@ def plot_night_time_series(df, zip_id=None, variables=None, night_start=17,
         rolling_window=rolling_window,
         global_min=global_min,
         global_max=global_max,
-        prescaled=prescaled
+        prescaled=prescaled,
+        excursion_variable=excursion_var_to_plot,
+        excursion_plot_type=excursion_plot_type
     )
 
 

@@ -1,3 +1,5 @@
+from datetime import timedelta, time
+
 import pandas as pd
 import numpy as np
 import joblib
@@ -6,8 +8,10 @@ from scipy.signal import find_peaks
 from pathlib import Path
 from sklearn.preprocessing import FunctionTransformer, MinMaxScaler
 
+from src.candidate_selection import create_nights_objects
 from src.configurations import Configuration
-from src.helper import check_df_index
+from src.helper import check_df_index, separate_flat_file, get_night_start_date
+from src.nights import Nights
 
 
 class FeatureSet:
@@ -15,9 +19,8 @@ class FeatureSet:
     def __init__(self, df: pd.DataFrame = None, input_path: Path = None,
                  sample_rate: int = None):
         """
-        Class to process pre-processed dataset into features to be used in t
-        raining
-        the models.
+        Class to process pre-processed dataset into features to be used in
+        training models.
         :param df: DataFrame containing pre-processed data.
         :param input_path: Path to the pre-processed data file.
         :param sample_rate: Sample rate in minutes for the data.
@@ -28,8 +31,10 @@ class FeatureSet:
         self.scaler = None
         self.sample_rate = sample_rate
         self.mean_cols = ['iob mean', 'cob mean', 'bg mean']
-        self.minmax_cols = ['iob min', 'cob min', 'bg min',
+        minmax_columns = ['iob min', 'cob min', 'bg min',
                             'iob max', 'cob max', 'bg max']
+        self.minmax_cols = [col for col in minmax_columns
+                            if col in self.df.columns]
         self.new_feature_cols = []
         self.all_feature_cols = []
         config = Configuration()
@@ -120,11 +125,8 @@ class FeatureSet:
 
         for col in columns:
             col_name = f'{col} hourly_mean'
-            self.df[col_name] = (
-                self.df[col]
-                .groupby([id_index, hour_index])
-                .transform('mean')
-            )
+            self.df[col_name] = (self.df[col].groupby([id_index, hour_index]).
+                                 transform('mean'))
             self.new_feature_cols.append(col_name)
 
     def add_peaks_above_mean(self):
@@ -176,15 +178,164 @@ class FeatureSet:
         self.df['l1_hyper'] = 1 if self.df['bg max'] > l1_high else 0
         self.df['l2_hypo'] = 1 if self.df['bg min'] < l2_low else 0
         self.df['l2_hyper'] = 1 if self.df['bg max'] > l2_high else 0
-        self.new_feature_cols.extend(['l1_hypo', 'l1_hyper', 'l2_hypo', 'l2_hyper'])
+        self.new_feature_cols.extend(['l1_hypo', 'l1_hyper',
+                                      'l2_hypo', 'l2_hyper'])
 
-    def add_mage_features(self):
+    def add_AGE_features(self, mode='turning_point_max_amplitude') -> pd.DataFrame:
         """
-        Adds features for Mean Amplitude of Glycemic Excursion (MAGE) based on
-        the standard deviation of the mean glucose levels.
+        Calculates the amplitude of qualifying glycaemic excursions at data
+        points within specified 'night' periods for each individual. A
+        qualifying excursion is defined as a change in 'bg mean' between a peak-
+        nadir or nadir-peak, that exceeds one standard deviation of the
+        'bg mean' values for that specific 'night'. The function adds a new
+        column 'excursion_amplitude' to the input DataFrame. This
+        column will contain the amplitude of the qualifying excursion if the
+        data point is a peak or nadir of such an excursion. If a point is part
+        of multiple qualifying excursions (e.g., a peak is the end of one upward
+        and the start of a downward excursion), the maximum amplitude associated
+        with it is assigned. For data points not part of any qualifying
+        excursion, the value will be 0.0.
+        :param mode: (str) Determines how the 'excursion_amplitude'
+            column is populated.
+            Options:
+            - 'turning_point_max_amplitude' (default): Assigns the maximum
+            amplitude of any qualifying excursion to its turning points
+            (peaks/nadirs). Other points are 0.0.
+            - 'excursion_amplitude_filled': Assigns the amplitude of a
+            qualifying excursion to all 30-minute intervals within its duration.
+            If intervals overlap, the maximum amplitude is taken.
+            - 'binary_flag': Assigns 1.0 to turning points of qualifying excursions,
+              and 0.0 otherwise.
+        :returns: (pd.DataFrame) The input DataFrame with the added
+            'excursion_amplitude' column
+
         """
-        self.df['mage'] = (self.df['bg max'] - self.df['bg min']) / 2
-        self.new_feature_cols.append('mage')
+        required_cols = ['bg mean', 'time', 'night_start_date']
+        if not isinstance(self.df.index, pd.MultiIndex) or list(self.df.index.names) != [
+            'id', 'datetime']:
+            raise ValueError(
+                "DataFrame must have a MultiIndex ['id', 'datetime'].")
+        if not all(col in self.df.columns for col in required_cols):
+            missing_cols = [col for col in required_cols if
+                            col not in self.df.columns]
+            raise ValueError(
+                f"DataFrame must contain {', '.join(missing_cols)} columns.")
+
+        df_working = self.df.reset_index()
+
+        df_working['datetime'] = pd.to_datetime(df_working['datetime'])
+        df_working = df_working.sort_values(by=['id', 'datetime'])
+
+        # SD of the 'bg mean' values within each defined 'night'
+        df_working['sd_threshold'] = df_working.groupby(['id', 'night_start_date'])[
+            'bg mean'].transform('std')
+
+        # Initialise the new column for excursion amplitudes with zeros
+        df_working['excursion_amplitude'] = 0.0
+
+        # Group by individual then by night for processing each sequence
+        for (individual_id, night_date_val), group in df_working.groupby(
+                ['id', 'night_start_date']):
+            glucose_series = group['bg mean']
+            current_sd_threshold = group['sd_threshold'].iloc[
+                0]  # SD is constant for the night
+
+            # Skip calculation if insufficient data points or SD is invalid
+            if len(glucose_series) < 2 or pd.isna(
+                    current_sd_threshold) or current_sd_threshold == 0:
+                continue
+
+            # Step 4: Identify Peaks and Nadirs within each Night
+            shifted_prev = glucose_series.shift(1)
+            shifted_next = glucose_series.shift(-1)
+
+            is_peak = (glucose_series > shifted_prev) & (
+                        glucose_series > shifted_next)
+            is_nadir = (glucose_series < shifted_prev) & (
+                        glucose_series < shifted_next)
+
+            # Handle boundary conditions for peaks/nadirs
+            if glucose_series.iloc[0] > glucose_series.iloc[1]:
+                is_peak.iloc[0] = True
+            elif glucose_series.iloc[0] < glucose_series.iloc[1]:
+                is_nadir.iloc[0] = True
+
+            if glucose_series.iloc[-1] > glucose_series.iloc[-2]:
+                is_peak.iloc[-1] = True
+            elif glucose_series.iloc[-1] < glucose_series.iloc[-2]:
+                is_nadir.iloc[-1] = True
+
+            turning_points_indices = group.index[is_peak | is_nadir].tolist()
+
+            # Store qualifying excursions for 'excursion_amplitude_filled' mode
+            qualifying_excursions_data = []
+
+            # Step 5: Identify Significant Excursions and Populate Column
+            for i in range(len(turning_points_indices) - 1):
+                idx1 = turning_points_indices[i]
+                idx2 = turning_points_indices[i + 1]
+
+                val1 = df_working.loc[idx1, 'bg mean']
+                val2 = df_working.loc[idx2, 'bg mean']
+
+                is_upward_excursion = is_nadir.loc[idx1] and is_peak.loc[idx2]
+                is_downward_excursion = is_peak.loc[idx1] and is_nadir.loc[idx2]
+
+                if is_upward_excursion or is_downward_excursion:
+                    amplitude = abs(val2 - val1)
+
+                    if amplitude > current_sd_threshold:
+                        if mode == 'turning_point_max_amplitude':
+                            df_working.loc[
+                                idx1, 'excursion_amplitude'] = max(
+                                df_working.loc[
+                                    idx1, 'excursion_amplitude'],
+                                amplitude)
+                            df_working.loc[
+                                idx2, 'excursion_amplitude'] = max(
+                                df_working.loc[
+                                    idx2, 'excursion_amplitude'],
+                                amplitude)
+                        elif mode == 'binary_flag':
+                            df_working.loc[
+                                idx1, 'excursion_amplitude'] = 1.0
+                            df_working.loc[
+                                idx2, 'excursion_amplitude'] = 1.0
+                        elif mode == 'excursion_amplitude_filled':
+                            # Store info for later filling to avoid overwriting
+                            # issues in loop
+                            qualifying_excursions_data.append({
+                                'start_idx': idx1,
+                                'end_idx': idx2,
+                                'amplitude': amplitude
+                            })
+
+            # For 'excursion_amplitude_filled' mode, fill values after
+            # identifying all excursions
+            if mode == 'excursion_amplitude_filled':
+                # Create temporary series for this group to apply filling logic
+                temp_amplitude_series = pd.Series(0.0, index=group.index)
+                for exc in qualifying_excursions_data:
+                    start_loc = group.index.get_loc(exc['start_idx'])
+                    end_loc = group.index.get_loc(exc['end_idx'])
+
+                    # Get the slice of indices for this excursion
+                    indices_in_excursion = group.index[start_loc: end_loc + 1]
+
+                    # Apply the amplitude, taking the max if already set by
+                    # another excursion
+                    for idx in indices_in_excursion:
+                        temp_amplitude_series.loc[idx] = max(
+                            temp_amplitude_series.loc[idx], exc['amplitude'])
+
+                # Update the main df_working DataFrame for this group
+                df_working.loc[group.index, 'excursion_amplitude'] \
+                    = temp_amplitude_series
+
+        df_output = df_working.set_index(['id', 'datetime'])
+        df_output = df_output.drop(columns=['sd_threshold'])
+
+        return df_output
 
     def get_all_features(self):
         """

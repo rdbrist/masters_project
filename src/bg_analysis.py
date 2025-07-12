@@ -40,11 +40,11 @@ class BGAnalyser:
         for nights in self.nights_objects:
             bg_zscore = [stats['bg_zscore'] for stats in
                          nights.get_stats_per_night()]
-            night_dates = [stats['night_date'] for stats in
+            night_dates = [stats['night_start_date'] for stats in
                            nights.get_stats_per_night()]
             for i, z in enumerate(bg_zscore):
                 zscore_data.append({'zip_id': nights.zip_id,
-                                    'night_date': night_dates[i],
+                                    'night_start_date': night_dates[i],
                                     'bg_zscore': z})
 
         return pd.DataFrame(zscore_data)

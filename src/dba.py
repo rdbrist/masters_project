@@ -20,6 +20,7 @@ class DBAAverager:
                              "be provided.")
         self.df = df
         self.cols = df.columns.tolist()
+        print(self.cols)
         self.night_start_hour = night_start_hour
         self.morning_end_hour = morning_end_hour
         self.full_cycle_times = self._generate_full_cycle_times()

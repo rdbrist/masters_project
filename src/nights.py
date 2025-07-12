@@ -270,7 +270,7 @@ class Nights:
             iob_nans = night_df['iob mean'].isna().sum()
             bg_nans = night_df['bg mean'].isna().sum()
             stats.append({
-                'night_date': date,
+                'night_start_date': date,
                 'num_intervals': num_intervals,
                 'missed_intervals': np.sum(vector),
                 'num_breaks': num_breaks,
@@ -302,7 +302,7 @@ class Nights:
         """
         self.stats_per_night = [s for s in self.stats_per_night if
                                 s['missed_intervals'] == 0]
-        desired_dates = {s['night_date'] for s in self.stats_per_night if
+        desired_dates = {s['night_start_date'] for s in self.stats_per_night if
                          s['missed_intervals'] == 0}
         # Filter self.nights to only those with a matching date
         self.nights = [night for night in self.nights if
@@ -481,7 +481,7 @@ def filter_nights(nights: Nights, missed_intervals: int,
     :param bg_nan_min: Minimum percentage of BG NaN allowed
     :return: List of objects with shape (id, [night_df, ...])
     """
-    night_dates = [s['night_date'] for s in nights.stats_per_night
+    night_dates = [s['night_start_date'] for s in nights.stats_per_night
                    if s['missed_intervals'] <= missed_intervals and
                    s['max_break_run'] <= max_break_run and
                    s['cob_nan_ratio'] <= cob_nan_min and
@@ -525,6 +525,7 @@ def consolidate_df_from_nights(
                                  "DatetimeIndex.")
             df = night_df.copy()
             df['id'] = nights.zip_id
+            df['night_start_date'] = night_start_date
             df = df.reset_index().set_index(['id', 'datetime'])
             consolidated_df = pd.concat([consolidated_df, df])
     return consolidated_df
