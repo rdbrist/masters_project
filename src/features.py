@@ -1,4 +1,5 @@
 from datetime import timedelta, time
+from unittest.mock import inplace
 
 import pandas as pd
 import numpy as np
@@ -6,7 +7,7 @@ import joblib
 
 from scipy.signal import find_peaks
 from pathlib import Path
-from sklearn.preprocessing import FunctionTransformer, MinMaxScaler
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
 from src.candidate_selection import create_nights_objects
 from src.configurations import Configuration
@@ -165,7 +166,7 @@ class FeatureSet:
             cos_transformer(24).fit_transform(self.df['hour_of_day']))
         self.new_feature_cols.extend(['hour_of_day', 'hour_sin', 'hour_cos'])
 
-    def add_excursion_features(self):
+    def add_level_excursion_features(self):
         """
         Adds features for excursions based on level 1 and level 2 hypo/hyper
         glycaemic thresholds. Level 1 is defined as a low threshold of 70 mg/dL
@@ -181,7 +182,8 @@ class FeatureSet:
         self.new_feature_cols.extend(['l1_hypo', 'l1_hyper',
                                       'l2_hypo', 'l2_hyper'])
 
-    def add_AGE_features(self, mode='turning_point_max_amplitude') -> pd.DataFrame:
+    def add_sd_excursion_features(self, mode='turning_point_max_amplitude') \
+            -> pd.DataFrame:
         """
         Calculates the amplitude of qualifying glycaemic excursions at data
         points within specified 'night' periods for each individual. A
@@ -204,15 +206,13 @@ class FeatureSet:
             - 'excursion_amplitude_filled': Assigns the amplitude of a
             qualifying excursion to all 30-minute intervals within its duration.
             If intervals overlap, the maximum amplitude is taken.
-            - 'binary_flag': Assigns 1.0 to turning points of qualifying excursions,
-              and 0.0 otherwise.
         :returns: (pd.DataFrame) The input DataFrame with the added
             'excursion_amplitude' column
 
         """
         required_cols = ['bg mean', 'time', 'night_start_date']
-        if not isinstance(self.df.index, pd.MultiIndex) or list(self.df.index.names) != [
-            'id', 'datetime']:
+        if (not isinstance(self.df.index, pd.MultiIndex) or
+                list(self.df.index.names) != ['id', 'datetime']):
             raise ValueError(
                 "DataFrame must have a MultiIndex ['id', 'datetime'].")
         if not all(col in self.df.columns for col in required_cols):
@@ -221,17 +221,19 @@ class FeatureSet:
             raise ValueError(
                 f"DataFrame must contain {', '.join(missing_cols)} columns.")
 
-        df_working = self.df.reset_index()
+        df_working = self.df[required_cols].reset_index()
 
         df_working['datetime'] = pd.to_datetime(df_working['datetime'])
         df_working = df_working.sort_values(by=['id', 'datetime'])
 
         # SD of the 'bg mean' values within each defined 'night'
-        df_working['sd_threshold'] = df_working.groupby(['id', 'night_start_date'])[
-            'bg mean'].transform('std')
+        df_working['sd_threshold'] = (
+            df_working.groupby(['id', 'night_start_date'])['bg mean'].
+            transform('std'))
 
         # Initialise the new column for excursion amplitudes with zeros
-        df_working['excursion_amplitude'] = 0.0
+        df_working[['excursion_amplitude', 'excursion_flag']] = 0.0
+
 
         # Group by individual then by night for processing each sequence
         for (individual_id, night_date_val), group in df_working.groupby(
@@ -296,11 +298,10 @@ class FeatureSet:
                                 df_working.loc[
                                     idx2, 'excursion_amplitude'],
                                 amplitude)
-                        elif mode == 'binary_flag':
                             df_working.loc[
-                                idx1, 'excursion_amplitude'] = 1.0
+                                idx1, 'excursion_flag'] = 1.0
                             df_working.loc[
-                                idx2, 'excursion_amplitude'] = 1.0
+                                idx2, 'excursion_flag'] = 1.0
                         elif mode == 'excursion_amplitude_filled':
                             # Store info for later filling to avoid overwriting
                             # issues in loop
@@ -332,10 +333,13 @@ class FeatureSet:
                 df_working.loc[group.index, 'excursion_amplitude'] \
                     = temp_amplitude_series
 
-        df_output = df_working.set_index(['id', 'datetime'])
-        df_output = df_output.drop(columns=['sd_threshold'])
+        df_working.set_index(['id', 'datetime'], inplace=True)
+        self.df = (
+            self.df.join(df_working[['excursion_amplitude','excursion_flag']],
+                         on=['id', 'datetime'], how='left'))
+        self.new_feature_cols.append(['excursion_amplitude', 'excursion_flag'])
 
-        return df_output
+        return df_working
 
     def get_all_features(self):
         """
@@ -349,8 +353,10 @@ class FeatureSet:
         self.add_hourly_mean(columns=self.mean_cols)
         self.add_peaks_above_mean()
         self.add_time_based_features()
+        self.add_level_excursion_features()
+        self.add_sd_excursion_features(mode='turning_point_max_amplitude')
         self.scale_features()
-        return self.df[self.get_all_feature_columns()].copy()
+        return self.df[self.get_all_feature_columns_only()].copy()
 
     def read_feature_set_from_file(self):
         try:
@@ -365,13 +371,13 @@ class FeatureSet:
         self.df[self.get_all_features()].to_csv(self.output_path, index=False)
 
     def scale_features(self):
-        cols = self.get_all_feature_columns()
+        cols = self.get_all_feature_columns_only()
         print(f'Scaling {cols} columns')
-        self.scaler = MinMaxScaler()
+        self.scaler = StandardScaler()
         self.df[cols] = self.scaler.fit_transform(self.df[cols])
 
     def inverse_scale_features(self):
-        cols = self.get_all_feature_columns()
+        cols = self.get_all_feature_columns_only()
         if self.scaler is None:
             raise ValueError("Scaler has not been fitted.")
         self.df[cols] = self.scaler.inverse_transform(
@@ -383,9 +389,18 @@ class FeatureSet:
     def load_scaler(self, path):
         self.scaler = joblib.load(path)
 
-    def get_all_feature_columns(self):
+    def get_all_feature_columns_only(self):
         """
         Returns all feature columns including original variables.
         :return: List of all feature columns.
         """
         return (self.mean_cols + self.minmax_cols + self.new_feature_cols)
+
+    def get_full_df(self):
+        """
+        Returns the full DataFrame with all features.
+        :return: pd.DataFrame with all features.
+        """
+        return self.df.copy()
+
+

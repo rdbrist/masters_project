@@ -257,9 +257,28 @@ def normalise_overnight_time(dt_obj, split_hour=6):
     periods. Times before `split_hour` (e.g., 6 AM) are moved to the next day
     relative to the reference.
     """
-    reference_date = datetime(2000, 1, 1)
-    if dt_obj.time() >= time(split_hour, 0, 0):
-        return datetime.combine(reference_date, dt_obj.time())
+    reference_date = datetime(1900, 1, 1)
+    # If input is a time object, use as is; if datetime, extract time
+    if isinstance(dt_obj, time):
+        t = dt_obj
+    elif isinstance(dt_obj, datetime):
+        t = dt_obj.time()
     else:
-        return datetime.combine(reference_date + timedelta(days=1),
-                                dt_obj.time())
+        raise TypeError(
+            "Input must be a datetime.datetime or datetime.time object")
+    if t > time(split_hour, 0, 0):
+        return datetime.combine(reference_date, t)
+    else:
+        return datetime.combine(reference_date + timedelta(days=1), t)
+
+def format_xticks_as_hhmm(ax, unique_times_str_list):
+    """
+    Helper function to format x-axis ticks to HH:MM.
+    :param ax: (matplotlib.axes.Axes) The axes object of the plot.
+    :param unique_times_str_list: (list) A list of unique time strings ('%H:%M')
+        that represent the x-axis tick positions.
+    """
+    # Set the tick locations to be the numerical indices of the unique times
+    ax.set_xticks(range(len(unique_times_str_list)))
+    # Set the tick labels to be the HH:MM strings
+    ax.set_xticklabels(unique_times_str_list, rotation=45, ha='right')

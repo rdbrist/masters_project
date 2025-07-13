@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime, time
 from tslearn.barycenters import dtw_barycenter_averaging
 from tslearn.utils import to_time_series_dataset
-from src.helper import get_night_start_date
+from src.helper import get_night_start_date, normalise_overnight_time
 
 
 class DBAAverager:
@@ -20,7 +20,6 @@ class DBAAverager:
                              "be provided.")
         self.df = df
         self.cols = df.columns.tolist()
-        print(self.cols)
         self.night_start_hour = night_start_hour
         self.morning_end_hour = morning_end_hour
         self.full_cycle_times = self._generate_full_cycle_times()
@@ -156,20 +155,26 @@ def get_dba_and_variance(df: pd.DataFrame,
 def dba_by_cluster(df, variables, night_start_hour, morning_end_hour,
                    cluster_col='cluster'):
 
-    def format_time_to_hhmm(time_obj):
-        """Formats a datetime.time object to HH:MM string."""
-        return time_obj.strftime('%H:%M')
+    # def format_time_to_hhmm(time_obj):
+    #     """Formats a datetime.time object to HH:MM string."""
+    #     return time_obj.strftime('%H:%M')
 
     cluster_dba_dfs = {}
     df_long = pd.DataFrame(columns=['cluster', 'time', 'bg mean'])
-    df_long = df_long.astype({'cluster': 'int', 'time': 'str',
+    df_long = df_long.astype({'cluster': 'int', 'time': 'datetime64[ns]',
                               'bg mean': 'float'})
+    # df_long = df_long.astype({'cluster': 'int', 'time': 'str',
+    #                           'bg mean': 'float'})
+
     col = ('bg mean', 'dba')
     for c, df_c in df.groupby(cluster_col):
         df_dba = get_dba_and_variance(df_c[variables], night_start_hour,
                                       morning_end_hour, rolling_window=3)
         cluster_dba_dfs[c] = df_dba
-        data = {'cluster': c, 'time': df_dba['time'].apply(format_time_to_hhmm),
-                'bg mean': df_dba[col]}
+        # data = {'cluster': c, 'time': df_dba['time'].apply(format_time_to_hhmm),
+        #         'bg mean': df_dba[col]}
+        norm_time = (df_dba['time'].apply(
+            lambda x: normalise_overnight_time(x, split_hour=morning_end_hour)))
+        data = {'cluster': c, 'time': norm_time, 'bg mean': df_dba[col]}
         df_long = pd.concat([df_long, pd.DataFrame(data)])
     return df_long
