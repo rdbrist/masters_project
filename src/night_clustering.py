@@ -599,6 +599,17 @@ class NightClustering:
                                 xlabel='Percentage of Nights in Cluster',
                                 ylabel='Patient')
 
+        # Annotate bar segments with percentages
+        for i, (idx, row) in enumerate(pivot_percent.iterrows()):
+            cumulative = 0
+            for cluster_val in row.values:
+                if cluster_val > 5:  # Only show percentages > 5% to avoid clutter
+                    x_pos = cumulative + cluster_val / 2
+                    ax.text(x_pos, i, f'{cluster_val:.0f}%',
+                            ha='center', va='center', fontsize=8,
+                            color='white', weight='bold')
+                cumulative += cluster_val
+
         for i, (idx, total) in enumerate(totals.items()):
             ax.text(102, i, f'{total}', va='center', ha='left',
                     fontsize=9)

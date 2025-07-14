@@ -341,6 +341,20 @@ class FeatureSet:
 
         return df_working
 
+    def add_cob_peaks(self, height=None, distance=1):
+        """
+        Identify peaks in the 'cob max' column and add a new column
+        indicating whether each row is a peak.
+        """
+        self.df['cob_peaks'] = 0
+        for (id_, night_start_date), group in (
+                self.df.groupby(['id', 'night_start_date'])):
+            peaks, _ = find_peaks(group['cob mean'], height=height,
+                                  distance=distance)
+            peak_indices = group.index[peaks]
+            self.df.loc[peak_indices, 'cob_peaks'] = 1
+        self.new_feature_cols.append('cob_peaks')
+
     def get_all_features(self):
         """
         Adds all features to the DataFrame and returns the updated DataFrame
@@ -402,5 +416,3 @@ class FeatureSet:
         :return: pd.DataFrame with all features.
         """
         return self.df.copy()
-
-

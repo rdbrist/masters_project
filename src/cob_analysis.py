@@ -68,8 +68,9 @@ class Cob:
         try:
             self.processed_dataset = pd.read_parquet(file_name)
             print(f'Number of records: {len(self.processed_dataset)}')
-            print(f"Number of people: "
-                  f"{len(self.processed_dataset.index.get_level_values('id').drop_duplicates())}")
+            people = len(self.processed_dataset.index.get_level_values(
+                'id').drop_duplicates())
+            print(f"Number of people: {people}")
             print(f"Number of days: "
                   f"{len(self.processed_dataset['day'].drop_duplicates())}")
         except FileNotFoundError:
@@ -146,7 +147,6 @@ class Cob:
         print(f'Number of records: {len(df)}')
         print(f"Number of people: "
               f"{len(df.index.get_level_values('id').drop_duplicates())}")
-        print(f"Systems used: \t{df['system'].drop_duplicates().values}")
 
     def get_person_data(self, p_id: int):
         """
@@ -529,8 +529,6 @@ class Cob:
             print(f'The following stats are based on parameters h={height} and '
                   f'd={distance}:')
             print(f'\tNumber of records: {len(df_all)}')
-            print(f'\tNumber of days with peaks: '
-                  f'{len(df_all["day"].drop_duplicates())}')
             print(f'\tNumber of peaks: {df_all["peak"].sum()}')
 
         self.offset_processed = False
