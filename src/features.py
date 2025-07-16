@@ -24,6 +24,11 @@ class FeatureSet:
         if sample_rate is None:
             raise ValueError("Sample rate must be provided.")
         self.df = df
+        self.info_cols = ['night_start_date', 'cluster']
+        if any(col not in self.df.columns for col in self.info_cols):
+            print(f'Given the DataFrame does not contain all of '
+                  f'["night_start_date", "cluster"] columns, these will not be '
+                  f'returned with the features.')
         self.scaler = None
         self.sample_rate = sample_rate
         self.mean_cols = ['iob mean', 'cob mean', 'bg mean']
@@ -170,10 +175,11 @@ class FeatureSet:
         """
         l1_low, l1_high = 70, 180
         l2_low, l2_high = 54, 250
-        self.df['l1_hypo'] = 1 if self.df['bg min'] < l1_low else 0
-        self.df['l1_hyper'] = 1 if self.df['bg max'] > l1_high else 0
-        self.df['l2_hypo'] = 1 if self.df['bg min'] < l2_low else 0
-        self.df['l2_hyper'] = 1 if self.df['bg max'] > l2_high else 0
+        self.df['l1_hypo'] = (self.df['bg min'] < l1_low).astype(int)
+        self.df['l1_hyper'] = (self.df['bg max'] > l1_high).astype(int)
+        self.df['l2_hypo'] = (self.df['bg min'] < l2_low).astype(int)
+        self.df['l2_hyper'] = (self.df['bg max'] > l2_high).astype(int)
+
         self.new_feature_cols.extend(['l1_hypo', 'l1_hyper',
                                       'l2_hypo', 'l2_hyper'])
 
@@ -332,7 +338,7 @@ class FeatureSet:
         self.df = (
             self.df.join(df_working[['excursion_amplitude','excursion_flag']],
                          on=['id', 'datetime'], how='left'))
-        self.new_feature_cols.append(['excursion_amplitude', 'excursion_flag'])
+        self.new_feature_cols.extend(['excursion_amplitude', 'excursion_flag'])
 
         return df_working
 
@@ -350,11 +356,12 @@ class FeatureSet:
             self.df.loc[peak_indices, 'cob_peaks'] = 1
         self.new_feature_cols.append('cob_peaks')
 
-    def get_all_features(self):
+    def get_all_features(self, scale=True):
         """
         Adds all features to the DataFrame and returns the updated DataFrame
         with the new features, including the original variables, ready for
         model training.
+        :param scale: (bool) Whether to scale the features using StandardScaler.
         :return: pd.DataFrame with all features.
         """
         self.add_day_type()
@@ -364,8 +371,11 @@ class FeatureSet:
         self.add_time_based_features()
         self.add_level_excursion_features()
         self.add_sd_excursion_features(mode='turning_point_max_amplitude')
-        self.scale_features()
-        return self.df[self.get_all_feature_columns_only()].copy()
+        self.add_cob_peaks(height=None, distance=1)
+        if scale:
+            self.scale_features()
+        return (self.df[self.get_all_feature_columns_only() + self.info_cols]
+                .copy())
 
     def read_feature_set_from_file(self):
         try:
