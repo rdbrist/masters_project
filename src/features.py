@@ -32,9 +32,10 @@ class FeatureSet:
         self.scaler = None
         self.sample_rate = sample_rate
         self.mean_cols = ['iob mean', 'cob mean', 'bg mean']
-        minmax_columns = ['iob min', 'cob min', 'bg min',
-                            'iob max', 'cob max', 'bg max']
-        self.minmax_cols = [col for col in minmax_columns
+        other_varcolumns = ['iob min', 'cob min', 'bg min',
+                            'iob max', 'cob max', 'bg max',
+                            'bg std', 'bg count']
+        self.other_varcols = [col for col in other_varcolumns
                             if col in self.df.columns]
         self.new_feature_cols = []
         self.all_feature_cols = []
@@ -413,7 +414,7 @@ class FeatureSet:
         Returns all feature columns including original variables.
         :return: List of all feature columns.
         """
-        return (self.mean_cols + self.minmax_cols + self.new_feature_cols)
+        return (self.mean_cols + self.other_varcols + self.new_feature_cols)
 
     def get_full_df(self):
         """
