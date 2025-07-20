@@ -23,7 +23,7 @@ class FeatureSet:
         """
         if sample_rate is None:
             raise ValueError("Sample rate must be provided.")
-        self.df = df
+        self.df = df.copy()
         self.info_cols = ['night_start_date', 'cluster']
         if any(col not in self.df.columns for col in self.info_cols):
             print(f'Given the DataFrame does not contain all of '
@@ -78,7 +78,7 @@ class FeatureSet:
         features.
         :return:
         """
-        self.df['day_type'] = \
+        self.df.loc[:, 'day_type'] = \
             (self.df.index.
              get_level_values('datetime').
              weekday.

@@ -11,7 +11,8 @@ class ObjectiveFunction:
     """
     Calculates the objective function value for a given DataFrame.
     """
-    def __init__(self, df: pd.DataFrame, sample_rate: int = None):
+    def __init__(self, df: pd.DataFrame, weights: list,
+                 sample_rate: int = None):
         """
         Initialises the ObjectiveFunction with a DataFrame, checks for the
         required columns, and raises an error if they are not present.
@@ -29,6 +30,10 @@ class ObjectiveFunction:
         self.df = self.features.get_all_features(scale=False)
         self.feature_cols = self.features.new_feature_cols
         self.night_features = None
+        self.weights = None
+        self.aggregate_features()
+        if weights:
+            self.assign_weights(weights)
         
     def aggregate_features(self):
         """
@@ -58,11 +63,13 @@ class ObjectiveFunction:
                 'l1_excursions': night_df[['l1_hyper', 'l1_hypo']].sum().sum(),
                 'l2_excursions': night_df[['l2_hyper', 'l2_hypo']].sum().sum(),
                 'mage': night_df['excursion_amplitude'].mean(),
-                'cob_peaks': night_df['cob_peaks'].sum()
+                # 'cob_peaks': night_df['cob_peaks'].sum()
             }
             agg_list.append(agg_dict)
         self.night_features = (pd.DataFrame(agg_list).
                                set_index(['id','night_start_date']))
+        print('Feature columns and order created, now apply weights using '
+              'assign_weights:')
 
         return self.night_features
 
@@ -95,14 +102,14 @@ class ObjectiveFunction:
         df['bg count'] = df['bg count'].astype(int)
         g_mean, sum_n = ObjectiveFunction._calculate_mean_background(df)
 
-        # Step 2: Calculate the first component (Mean of Within-Interval Variances, Weighted)
+        # Step 2: 1st component (Mean of Within-Interval Variances, Weighted)
         # Sum(n_i * s_i^2) / Sum(n_i)
         df['bg_variance'] = df['bg std'] ** 2
         sum_n_s_squared = (df['bg count'] * df[
             'bg_variance']).sum()
         component1 = sum_n_s_squared / sum_n
 
-        # Step 3: Calculate the second component (Variance of Interval Means, Weighted)
+        # Step 3: 2nd component (Variance of Interval Means, Weighted)
         # Sum(n_i * (g_i - g_mean)^2) / Sum(n_i)
         df['diff_squared'] = (df['bg mean'] - g_mean) ** 2
         sum_n_diff_squared = (df['bg count'] * df[
@@ -141,4 +148,29 @@ class ObjectiveFunction:
         scaled = self.scale_features()
         scores = scaled.sum(axis=1) / scaled.shape[1]
 
-        return pd.DataFrame(scores, index=self.night_features.index)
+        return pd.DataFrame(scores, columns=['score'],
+                            index=self.night_features.index)
+
+    def assign_weights(self, weights=None):
+        """
+        Set weights for the objective function components between 0 and 2.
+        Default to 1 for all (keeping the values the same).
+        :param weights: (list) values between 0 and 2
+        :return:
+        """
+        if weights is None:
+            weights = []
+        if not weights:
+            weights = [1] * len(self.night_features.columns)
+        if len(weights) != len(self.night_features.columns):
+            raise Exception('Number of weights does not match number of '
+                            'features.')
+        if any(w < 0 or w > 2 for w in weights):
+            raise Exception('Weights must be between 0 and 2.')
+
+        print('Weights being set as follows:')
+        for i, col in enumerate(self.night_features.columns):
+            print(f'{col}: {weights[i]}')
+
+        self.weights = weights
+        self.night_features = self.night_features * self.weights
