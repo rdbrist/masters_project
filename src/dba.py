@@ -149,7 +149,7 @@ def get_dba_and_variance(df: pd.DataFrame,
         do not set to leave as point-in-time
     :return: (pd.DataFrame) DataFrame
     """
-    dba = DBAAverager(df, night_start, morning_end)
+    dba = DBAAverager(df, night_start.hour, morning_end.hour)
     return dba.get_dba_and_variance_dataframe(rolling_window=rolling_window)
 
 def dba_by_cluster(df, variables, night_start_hour, morning_end_hour,

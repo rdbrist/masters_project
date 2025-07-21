@@ -5,6 +5,7 @@ from sklearn.preprocessing import StandardScaler
 
 from src.features import FeatureSet
 from src.nights import Nights
+from test_read import input_file
 
 
 class ObjectiveFunction:
@@ -30,11 +31,9 @@ class ObjectiveFunction:
         self.df = self.features.get_all_features(scale=False)
         self.feature_cols = self.features.new_feature_cols
         self.night_features = None
-        self.weights = None
         self.aggregate_features()
-        if weights:
-            self.assign_weights(weights)
-        
+        self.weights = self.assign_weights(weights) if weights else None
+
     def aggregate_features(self):
         """
         Aggregates the features for each night period in the DataFrame:
@@ -135,7 +134,9 @@ class ObjectiveFunction:
         Scales the features in the DataFrame.
         :return: Scaled DataFrame.
         """
-        return StandardScaler().fit_transform(self.night_features)
+        if self.weights:
+            df = self.night_features * self.weights
+        return StandardScaler().fit_transform(df)
 
     def get_objective_function_scores(self):
         """
@@ -150,6 +151,19 @@ class ObjectiveFunction:
 
         return pd.DataFrame(scores, columns=['score'],
                             index=self.night_features.index)
+
+    def get_scaled_features(self):
+        """
+        Calculates the objective function scores for each night period.
+        :return: DataFrame with the objective function scores.
+        """
+        if self.night_features is None:
+            self.aggregate_features()
+
+        df = self.night_features.copy()
+        df[self.night_features.columns] = self.scale_features()
+
+        return df
 
     def assign_weights(self, weights=None):
         """
@@ -172,5 +186,4 @@ class ObjectiveFunction:
         for i, col in enumerate(self.night_features.columns):
             print(f'{col}: {weights[i]}')
 
-        self.weights = weights
-        self.night_features = self.night_features * self.weights
+        return weights
