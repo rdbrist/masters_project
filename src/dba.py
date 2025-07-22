@@ -135,21 +135,21 @@ class DBAAverager:
         return X
 
 def get_dba_and_variance(df: pd.DataFrame,
-                         night_start: time = None,
-                         morning_end: time = None,
+                         night_start_hour: int = None,
+                         morning_end_hour: int = None,
                          rolling_window: int = None) -> pd.DataFrame:
     """
     Create dataframe that averages using DBA and produces variance either
     point-in-time or using a rolling window.
     :param df: (pd.DataFrame) DataFrame with datetime index and time series
         columns
-    :param night_start: (datetime.time) Night start time
-    :param morning_end: (datetime.time) Night end time
+    :param night_start_hour: (int) Night start hour
+    :param morning_end_hour: (int) Night end hour
     :param rolling_window: (int) Number of intervals for the rolling window or
         do not set to leave as point-in-time
     :return: (pd.DataFrame) DataFrame
     """
-    dba = DBAAverager(df, night_start.hour, morning_end.hour)
+    dba = DBAAverager(df, night_start_hour, morning_end_hour)
     return dba.get_dba_and_variance_dataframe(rolling_window=rolling_window)
 
 def dba_by_cluster(df, variables, night_start_hour, morning_end_hour,
