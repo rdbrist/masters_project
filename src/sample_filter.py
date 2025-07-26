@@ -64,7 +64,8 @@ class SampleFilter:
             create_nights_objects(separated, night_start=night_start,
                                   morning_end=morning_end,
                                   sample_rate=self.sample_rate))
-        print(f"Number of nights objects created: {len(self.nights_objects)}")
+        logger.info(f"Number of nights objects created: "
+                    f"{len(self.nights_objects)}")
         self.apply_constraints(missed_intervals, max_break_run, min_nights,
                                cob_nan_min, iob_nan_min, bg_nan_min)
 
@@ -78,6 +79,8 @@ class SampleFilter:
         Filters the nights by the applied constraint for each Nights object,
         such that only valid nights are retained.
         """
+        if any(p is None for p in [cob_nan_min, iob_nan_min, bg_nan_min]):
+            cob_nan_min, iob_nan_min, bg_nan_min = 1, 1, 1
         new_nights_objs = []
         night_count = 0
         for nights_obj in self.nights_objects:
@@ -94,7 +97,8 @@ class SampleFilter:
                 night_count += len(nights_obj.nights)
         self.nights_objects = new_nights_objs
         self.night_count = night_count
-        self.stats = provide_data_statistics(self.nights_objects)
+        if night_count != 0:
+            self.stats = provide_data_statistics(self.nights_objects)
 
     def get_filtered_candidates(self):
         """
@@ -134,4 +138,7 @@ class SampleFilter:
                         f'\n  missed_intervals={self.missed_intervals}')
             logger.info(f"Number of candidates: {len(self.candidates)}")
             logger.info(f"Number of nights: {self.night_count}")
-        return len(self.candidates), self.night_count
+        if self.stats is not None:
+            return len(self.candidates), self.night_count
+        else:
+            return 0, 0

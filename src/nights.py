@@ -262,8 +262,6 @@ class Nights:
             max_break_duration = breaks.max() if num_breaks > 0 else 0
             total_break_duration = breaks.sum() if num_breaks > 0 else 0
 
-            # if night_df['bg mean'].dtype != 'Float32':
-            #     print(self.zip_id)
             bg = night_df['bg mean'].astype(float)
             bg_night_mean = bg.mean()
             cob_nans = night_df['cob mean'].isna().sum()
