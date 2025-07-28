@@ -282,3 +282,35 @@ def format_xticks_as_hhmm(ax, unique_times_str_list):
     ax.set_xticks(range(len(unique_times_str_list)))
     # Set the tick labels to be the HH:MM strings
     ax.set_xticklabels(unique_times_str_list, rotation=45, ha='right')
+
+import pandas as pd
+import numpy as np
+
+def generate_alphabetical_aliases(ids_input):
+    unique_ids_sorted_array = np.unique(ids_input)
+    unique_ids = unique_ids_sorted_array.tolist()
+
+    if len(unique_ids) > 26:
+        raise ValueError(f"Too many unique IDs ({len(unique_ids)}). Can only generate aliases for up to 26 unique IDs.")
+
+    aliases_map = {}
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+    for i, unique_id in enumerate(unique_ids):
+         aliases_map[unique_id] = alphabet[i]
+
+    return aliases_map
+
+def cluster_colours():
+    """
+    Returns a list of distinct colours for clustering purposes.
+    :return: List of colour hex codes.
+    """
+    import seaborn as sns
+    tab10_colors = sns.color_palette('tab10')
+    return {
+        0: tab10_colors[0],
+        1: tab10_colors[1],
+        2: tab10_colors[2],
+        3: tab10_colors[3]
+    }

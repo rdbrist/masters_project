@@ -11,8 +11,9 @@ from tsfresh import extract_features
 from tsfresh.feature_extraction import ComprehensiveFCParameters, \
     EfficientFCParameters, MinimalFCParameters
 from tsfresh.utilities.dataframe_functions import impute
+from umap import UMAP
 
-from src.helper import check_df_index, get_night_start_date
+from src.helper import check_df_index, get_night_start_date, cluster_colours
 from src.config import FIGURES_DIR
 
 
@@ -48,16 +49,17 @@ class NightClustering:
         self.night_pca_components = None
         self.night_clusters = None
         self.tsne_clusters = None
+        self.tsne_results = None
+        self.umap_clusters = None
+        self.umap_results = None
         self.rolling_features_df = None
         self.silhouette_score = None
-        self.tsne_results = None
 
         # Store scalers and PCA models
         self.scaler = None
         self.pca_model = None
 
-        self.before_hash = None
-        self.after_hash = None
+        self.cluster_color_map = cluster_colours()
 
     def get_unique_ids(self):
         """
@@ -80,6 +82,103 @@ class NightClustering:
 
     def _get_feature_settings(self, setting_name):
         """Helper to get tsfresh feature extraction settings."""
+        cob_iob_features = {
+            'iob mean': {
+                'mean': None,
+                'variance': None,
+                'maximum': None,
+                'minimum': None,
+                'median': None,
+                'standard_deviation': None,
+                'root_mean_square': None,
+                'first_location_of_maximum': None,
+                'last_location_of_maximum': None,
+                'first_location_of_minimum': None,
+                'last_location_of_minimum': None,
+                'sample_entropy': None,
+                'longest_strike_below_mean': None,
+                'longest_strike_above_mean': None
+            },
+            'iob max': {
+                'count_above': [{'t': 100}],
+                'maximum': None,
+                'minimum': None,
+                'median': None,
+                'standard_deviation': None,
+                'root_mean_square': None,
+                'first_location_of_maximum': None,
+                'last_location_of_maximum': None,
+                'first_location_of_minimum': None,
+                'last_location_of_minimum': None,
+            },
+            'cob mean': {
+                'mean': None,
+                'variance': None,
+                'maximum': None,
+                'minimum': None,
+                'median': None,
+                'standard_deviation': None,
+                'root_mean_square': None,
+                'first_location_of_maximum': None,
+                'last_location_of_maximum': None,
+                'first_location_of_minimum': None,
+                'last_location_of_minimum': None,
+                'sample_entropy': None,
+                'longest_strike_below_mean': None,
+                'longest_strike_above_mean': None
+            },
+            'cob max': {
+                'count_above': [{'t': 100}],
+                'maximum': None,
+                'minimum': None,
+                'median': None,
+                'standard_deviation': None,
+                'root_mean_square': None,
+                'first_location_of_maximum': None,
+                'last_location_of_maximum': None,
+                'first_location_of_minimum': None,
+                'last_location_of_minimum': None,
+            }
+        }
+        bg_features = {
+            'bg mean': {
+                'mean': None,
+                'variance': None,
+                'maximum': None,
+                'minimum': None,
+                'median': None,
+                'standard_deviation': None,
+                'root_mean_square': None,
+                'count_above_mean': None,
+                'count_below_mean': None,
+                'count_above': [{'t': 100}],
+                'count_below': [{'t': 50}],
+                'change_quantiles': [{'ql': 0.2, 'qh': 0.8, 'isabs': True,
+                                      'f_agg': 'mean'}],
+                'first_location_of_maximum': None,
+                'last_location_of_maximum': None,
+                'first_location_of_minimum': None,
+                'last_location_of_minimum': None,
+                'sample_entropy': None,
+                'longest_strike_below_mean': None,
+                'longest_strike_above_mean': None,
+                'mean_abs_change': None,
+            },
+            'bg max': {
+                'maximum': None,
+                'minimum': None,
+                'median': None,
+                'standard_deviation': None,
+                'root_mean_square': None,
+            },
+            'bg min': {
+                'maximum': None,
+                'minimum': None,
+                'median': None,
+                'standard_deviation': None,
+                'root_mean_square': None,
+            },
+        }
         if setting_name == 'comprehensive':
             return ComprehensiveFCParameters()
         elif setting_name == 'efficient':
@@ -87,106 +186,14 @@ class NightClustering:
         elif setting_name == 'minimal':
             return MinimalFCParameters()
         elif setting_name == 'custom':
-            self.customised_feature_dict = {
-                'iob mean': {
-                    'mean': None,
-                    'variance': None,
-                    'maximum': None,
-                    'minimum': None,
-                    'median': None,
-                    'standard_deviation': None,
-                    'root_mean_square': None,
-                    'first_location_of_maximum': None,
-                    'last_location_of_maximum': None,
-                    'first_location_of_minimum': None,
-                    'last_location_of_minimum': None,
-                    'sample_entropy': None,
-                    'longest_strike_below_mean': None,
-                    'longest_strike_above_mean': None
-                },
-                'iob max': {
-                    'count_above': [{'t': 100}],
-                    'maximum': None,
-                    'minimum': None,
-                    'median': None,
-                    'standard_deviation': None,
-                    'root_mean_square': None,
-                    'first_location_of_maximum': None,
-                    'last_location_of_maximum': None,
-                    'first_location_of_minimum': None,
-                    'last_location_of_minimum': None,
-                },
-                'cob mean': {
-                    'mean': None,
-                    'variance': None,
-                    'maximum': None,
-                    'minimum': None,
-                    'median': None,
-                    'standard_deviation': None,
-                    'root_mean_square': None,
-                    'first_location_of_maximum': None,
-                    'last_location_of_maximum': None,
-                    'first_location_of_minimum': None,
-                    'last_location_of_minimum': None,
-                    'sample_entropy': None,
-                    'longest_strike_below_mean': None,
-                    'longest_strike_above_mean': None
-                },
-                'cob max': {
-                    'count_above': [{'t': 100}],
-                    'maximum': None,
-                    'minimum': None,
-                    'median': None,
-                    'standard_deviation': None,
-                    'root_mean_square': None,
-                    'first_location_of_maximum': None,
-                    'last_location_of_maximum': None,
-                    'first_location_of_minimum': None,
-                    'last_location_of_minimum': None,
-                },
-                'bg mean': {
-                    'mean': None,
-                    'variance': None,
-                    'maximum': None,
-                    'minimum': None,
-                    'median': None,
-                    'standard_deviation': None,
-                    'root_mean_square': None,
-                    'count_above_mean': None,
-                    'count_below_mean': None,
-                    'count_above': [{'t': 100}],
-                    'count_below': [{'t': 50}],
-                    'change_quantiles': [{'ql': 0.2, 'qh': 0.8, 'isabs': True,
-                                          'f_agg': 'mean'}],
-                    'first_location_of_maximum': None,
-                    'last_location_of_maximum': None,
-                    'first_location_of_minimum': None,
-                    'last_location_of_minimum': None,
-                    'sample_entropy': None,
-                    'longest_strike_below_mean': None,
-                    'longest_strike_above_mean': None,
-                    'mean_abs_change': None,
-                },
-                'bg max': {
-                    'maximum': None,
-                    'minimum': None,
-                    'median': None,
-                    'standard_deviation': None,
-                    'root_mean_square': None,
-                },
-                'bg min': {
-                    'maximum': None,
-                    'minimum': None,
-                    'median': None,
-                    'standard_deviation': None,
-                    'root_mean_square': None,
-                },
-            }
+            self.customised_feature_dict = cob_iob_features | bg_features
+        elif setting_name == 'custom_no_bg':
+            self.customised_feature_dict = cob_iob_features
             return None
         else:
             raise ValueError("Invalid feature_settings. Choose "
-                             "'comprehensive', 'efficient', 'minimal', or "
-                             "'custom'.")
+                             "'comprehensive', 'efficient', 'minimal', "
+                             "'custom' or 'custom_no_bg.")
 
     def extract_night_level_features(self, multi_threaded=True):
         """
@@ -256,8 +263,12 @@ class NightClustering:
             index=X_imputed.index
         )
         scaled_cols = set(self.scaled_night_features.columns)
-        print(f"Dropped features from scaling: "
-              f"{unscaled_cols.difference(scaled_cols)}")
+        if len(unscaled_cols.difference(scaled_cols)) > 10:
+            print(f"Dropped {len(unscaled_cols.difference(scaled_cols))} "
+                  f"features.")
+        else:
+            print(f"Dropped features from scaling: "
+                  f"{unscaled_cols.difference(scaled_cols)}")
 
         if n_components is not None:
             self.pca_model = PCA(n_components=n_components)
@@ -272,6 +283,7 @@ class NightClustering:
 
     def plot_pca_cumulative_variance(self):
         """ Plots the cumulative explained variance ratio from PCA. """
+        fig = plt.figure(figsize=(5, 4))
         plt.plot(np.cumsum(self.pca_model.explained_variance_ratio_))
         plt.title('Cumulative Explained Variance by PCA Components')
         plt.xlabel('Number of components')
@@ -320,15 +332,17 @@ class NightClustering:
                 'id': id_list
             })
 
-            plt.figure(figsize=(8, 6))
+            plt.figure(figsize=(6, 5))
             sns.scatterplot(data=plot_df, x='PC1', y='PC2', hue='cluster_label',
-                            palette='viridis', alpha=0.7)
+                            palette=self.cluster_color_map, alpha=0.7)
 
             plt.title('Nights Clustered (KMeans)')
             plt.xlabel('Principal Component 1')
             plt.ylabel('Principal Component 2')
-            plt.savefig(FIGURES_DIR / 'clustered_nights_pca.png', dpi=400,
-                        bbox_inches='tight')
+            plt.legend(title='Cluster')
+            plt.savefig(FIGURES_DIR /
+                f'clustered_nights_pca_{n_clusters}clusters.png',
+                dpi=400, bbox_inches='tight')
             plt.show()
         elif (plot_2d and
               (self.night_pca_components is None
@@ -378,9 +392,13 @@ class NightClustering:
             elif cluster_type == 'tsne':
                 self.fit_tsne(**kwargs)
                 self.clustering_tsne(n_clusters=n_clusters)
+            elif cluster_type == 'umap':
+                self.fit_umap(**kwargs)
+                self.clustering_umap(n_clusters=n_clusters)
             silhouette_scores.append(self.silhouette_score)
 
         if plot_results:
+            fig = plt.figure(figsize=(5, 4))
             plt.plot(cluster_range, silhouette_scores)
             plt.title('Silhouette Analysis')
             plt.xlabel('Number of clusters')
@@ -487,9 +505,14 @@ class NightClustering:
         if self.night_features_df is None:
             raise ValueError("Night features not extracted yet. Run "
                              "extract_night_level_features first.")
-        clusters = (self.night_clusters if cluster_type == 'kmeans'
-                    else self.tsne_clusters)
-
+        if cluster_type == 'kmeans':
+            clusters = self.night_clusters
+        elif cluster_type == 'tsne':
+            clusters = self.tsne_clusters
+        elif cluster_type == 'umap':
+            clusters = self.umap_clusters
+        # clusters = (self.night_clusters if cluster_type == 'kmeans'
+        #             elif self.tsne_clusters)
         # Scaled features for heatmap color
         scaled = self.scaled_night_features.copy()
         scaled_cols = scaled.columns
@@ -505,12 +528,14 @@ class NightClustering:
         annot_fmt = annot_data.round(2).astype(str)
 
         plt.figure(figsize=(6, 14))
-        sns.heatmap(heatmap_data, annot=annot_fmt, fmt='', cmap='Spectral',
+        sns.heatmap(heatmap_data, annot=annot_fmt, fmt='', cmap='coolwarm',
                     center=0)
         plt.title('Cluster Centroids: Scaled Feature Means (Unscaled Means '
                   'Overlay)')
         plt.xlabel('Cluster', verticalalignment='top')
-        plt.ylabel('Feature')
+        plt.savefig(FIGURES_DIR / f'heatmap_cluster_features_{cluster_type}_'
+                                  f'{len(set(clusters))}_clusters.png', dpi=400,
+                    bbox_inches='tight')
         plt.show()
 
     def fit_tsne(self, perplexity=30, max_iter=1000):
@@ -547,6 +572,7 @@ class NightClustering:
                              "first.")
 
         kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+
         tsne_clusters = kmeans.fit_predict(self.tsne_results)
         self.silhouette_score = silhouette_score(self.tsne_results,
                                                  tsne_clusters)
@@ -563,17 +589,92 @@ class NightClustering:
             raise ValueError("t-SNE results not computed yet. Run fit_tsne "
                              "first.")
 
-        clusters = (self.night_clusters if cluster_type == 'kmeans'
-                    else self.tsne_clusters)
+        if cluster_type == 'kmeans':
+            clusters = self.night_clusters
+        elif cluster_type == 'tsne':
+            clusters = self.tsne_clusters
+        elif cluster_type == 'umap':
+            clusters = self.umap_clusters
 
-        plt.figure(figsize=(8, 6))
+        plt.figure(figsize=(6, 5))
         sns.scatterplot(x=self.tsne_results[:, 0], y=self.tsne_results[:, 1],
-                        hue=clusters, palette='tab10', alpha=0.7)
-        plt.title('t-SNE Visualization of Night Features by KMeans Cluster')
+                        hue=clusters, palette=self.cluster_color_map, alpha=0.7)
+        plt.title('t-SNE Visualisation of Night Features by KMeans Cluster')
         plt.xlabel('t-SNE 1')
         plt.ylabel('t-SNE 2')
-        plt.legend(title='Cluster', bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.legend(title='Cluster', loc='lower right')
         plt.tight_layout()
+        plt.savefig(FIGURES_DIR / 'tsne_clusters.png', dpi=400,
+                    bbox_inches='tight')
+        plt.show()
+
+    def fit_umap(self, n_neighbors=5, min_dist=0.01):
+        """
+        Fits UMAP to the night-level features.
+        :param perplexity: (int), Perplexity parameter for UMAP.
+        :param max_iter: (int), Maximum number of iterations for UMAP.
+        :param random_state: (int), Random state for reproducibility.
+        :return: UMAP results as a 2D array.
+        """
+        if self.night_features_df is None:
+            raise ValueError("Night features not extracted yet. Run "
+                             "extract_night_level_features first.")
+
+        cluster_cols = ['cluster_label', 'umap_cluster_label']
+        features = self.night_features_df.copy()
+        for col in cluster_cols:
+            if col in features.columns:
+                features = features.drop(columns=col)
+
+        umap = UMAP(n_neighbors=n_neighbors, min_dist=min_dist, random_state=42)
+        self.umap_results = umap.fit_transform(self.scaled_night_features)
+
+        return self.umap_results
+
+    def clustering_umap(self, n_clusters=3):
+        """
+        Clusters the UMAP results using KMeans and adds cluster labels to the
+        night features DataFrame.
+        """
+        if self.umap_results is None:
+            raise ValueError("UMAP results not computed yet. Run fit_umap "
+                             "first.")
+
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+
+        umap_clusters = kmeans.fit_predict(self.umap_results)
+        self.silhouette_score = silhouette_score(self.umap_results,
+                                                 umap_clusters)
+        self.umap_clusters = umap_clusters
+
+    def plot_umap(self, cluster_type='kmeans'):
+        """
+        Plots a UMAP visualisation of the night-level features, coloured by
+        cluster label. Provides the option to use either KMeans clusters from
+        original KMeans clustering or UMAP clusters.
+        :param cluster_type: (str), Type of clustering to plot.
+        """
+        if self.umap_results is None:
+            raise ValueError("UMAP results not computed yet. Run fit_umap "
+                             "first.")
+
+        if cluster_type == 'kmeans':
+            clusters = self.night_clusters
+        elif cluster_type == 'tsne':
+            clusters = self.tsne_clusters
+        elif cluster_type == 'umap':
+            clusters = self.umap_clusters
+
+        plt.figure(figsize=(6, 5))
+        sns.scatterplot(x=self.umap_results[:, 0], y=self.umap_results[:, 1],
+                        hue=clusters, palette=self.cluster_color_map, alpha=0.7)
+        plt.title('UMAP Visualisation of Night Features by KMeans Cluster')
+        plt.xlabel('UMAP 1')
+        plt.ylabel('UMAP 2')
+        plt.legend(title='Cluster', loc='lower right')
+        plt.tight_layout()
+        plt.savefig(FIGURES_DIR / 'umap_clusters.png', dpi=400,
+                    bbox_inches='tight')
         plt.show()
 
     def plot_cluster_distribution(self, pivot_counts: pd.DataFrame = None,
@@ -587,14 +688,18 @@ class NightClustering:
             plot, either 'kmeans' or 'tsne'.
         :return:
         """
+        from src.helper import generate_alphabetical_aliases
         if pivot_counts is None:
             pivot_counts = self.get_cluster_distributions(cluster_type)
+        id_aliases = generate_alphabetical_aliases(pivot_counts.index)
+        pivot_counts.index = pivot_counts.index.map(id_aliases)
         pivot_percent = pivot_counts.div(pivot_counts.sum(axis=1), axis=0) * 100
         totals = pivot_counts.sum(axis=1)
         ax = pivot_percent.plot(kind='barh',
                                 stacked=True,
                                 figsize=(6, 6),
-                                colormap='viridis',
+                                color=[self.cluster_color_map[col] for col in
+                                       pivot_percent.columns],
                                 title='Distribution of Clusters per Patient',
                                 xlabel='Percentage of Nights in Cluster',
                                 ylabel='Patient')
@@ -603,7 +708,7 @@ class NightClustering:
         for i, (idx, row) in enumerate(pivot_percent.iterrows()):
             cumulative = 0
             for cluster_val in row.values:
-                if cluster_val > 5:  # Only show percentages > 5% to avoid clutter
+                if cluster_val > 5:  # Only show percentages > 5%
                     x_pos = cumulative + cluster_val / 2
                     ax.text(x_pos, i, f'{cluster_val:.0f}%',
                             ha='center', va='center', fontsize=8,
@@ -623,6 +728,9 @@ class NightClustering:
                   ncol=len(labels),
                   borderaxespad=0.
                   )
+        plt.savefig(FIGURES_DIR / f'cluster_distribution_{cluster_type}_'
+                                  f'{len(pivot_counts.columns)}_clusters.png',
+                    dpi=400,)
         plt.show()
 
     def get_cluster_distributions(self, cluster_type='kmeans'):
@@ -637,10 +745,18 @@ class NightClustering:
         if cluster_type == 'tsne' and self.tsne_clusters is None:
             raise ValueError("t-SNE clusters not computed yet. Run "
                              "clustering_tsne first.")
+        if cluster_type == 'umap' and self.umap_clusters is None:
+            raise ValueError("UMAP clusters not computed yet. Run "
+                             "clustering_umap first.")
 
         features_df = self.return_dataset_with_clusters().reset_index()
-        cluster_col = 'cluster_label' if cluster_type == 'kmeans' \
-            else 'tsne_cluster_label'
+        if cluster_type == 'kmeans':
+            cluster_col = 'cluster_label'
+        elif cluster_type == 'tsne':
+            cluster_col = 'tsne_cluster_label'
+        elif cluster_type == 'umap':
+            cluster_col = 'umap_cluster_label'
+
         pivot_counts = (
             features_df[['id', cluster_col, 'night_start_date']].
             drop_duplicates().
@@ -702,8 +818,12 @@ class NightClustering:
         if cluster_label is None:
             raise ValueError("cluster_label must be provided to filter nights.")
         features_df = self.return_dataset_with_clusters().reset_index()
-        cluster_col = 'cluster_label' if cluster_type == 'kmeans' \
-            else 'tsne_cluster_label'
+        if cluster_type == 'kmeans':
+            cluster_col = 'cluster_label'
+        elif cluster_type == 'tsne':
+            cluster_col = 'tsne_cluster_label'
+        elif cluster_type == 'umap':
+            cluster_col = 'umap_cluster_label'
 
         return features_df[features_df[cluster_col] ==
                            cluster_label].set_index(['id', 'datetime'])

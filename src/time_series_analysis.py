@@ -9,6 +9,8 @@ from sklearn.metrics import mean_absolute_error
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller
+
+from src.config import FIGURES_DIR
 from src.dba import DBAAverager
 from src.features import FeatureSet
 
@@ -194,7 +196,7 @@ def remove_zero_or_null_days(df: pd.DataFrame, value_col: str) -> pd.DataFrame:
 
 
 def _plot_time_series_profile(
-        df, variables, groupby_cols, x_col, x_label, title,night_start,
+        df, variables, groupby_cols, x_col, title,night_start,
         morning_end, method='mean', rolling_window=None, y_limits: tuple = None,
         global_min=None, global_max=None, prescaled=True,
         excursion_variable: str = None, excursion_plot_type='markers',
@@ -226,7 +228,7 @@ def _plot_time_series_profile(
     x = stats[x_col].astype(str)
     x_labels = stats['time'].apply(lambda t: t.strftime('%H:%M'))
     plt.figure(figsize=(10, 4))
-    colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:purple', 'tab:brown']
+    colors = ['tab:green', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown']
 
     # for var, color in zip(variables, colors):
     #     avg = stats[(var, method)]
@@ -328,13 +330,14 @@ def _plot_time_series_profile(
                              alpha=0.3, label=excursion_label)
 
     plt.title(title)
-    plt.ylabel('Scaled Value')
-    plt.xlabel(x_label)
+    plt.ylabel('Scaled Mean')
     plt.xticks(x, x_labels, rotation=90)
     if y_limits is not None:
         plt.ylim(y_limits)
     plt.legend()
     plt.tight_layout()
+    filename = title.replace(" ", "_").replace(":", "_").lower()
+    plt.savefig(FIGURES_DIR / f'{filename}.png', dpi=400)
     plt.show()
 
 
@@ -343,7 +346,7 @@ def plot_night_time_series(df, zip_id=None, variables=None, night_start=17,
                            y_limits: tuple = None, rolling_window=None,
                             global_min=None, global_max=None, prescaled=True,
                            include_excursions: bool = False,
-                           excursion_plot_type='markers'):
+                           excursion_plot_type='markers', cluster=None):
     """
     Plot the means of specified variables for a group of nights during night
     hours.
@@ -376,10 +379,11 @@ def plot_night_time_series(df, zip_id=None, variables=None, night_start=17,
     night_count = len(df_new.
                       reset_index()[['id','night_start_date']].
                       drop_duplicates())
-    if zip_id is None:
-        title = f'Nights: {night_count}'
-    else:
-        title = f'Person {str(zip_id)}, nights: {night_count}'
+    title = f'Nights: {night_count}'
+    if cluster is not None:
+        title = f'Cluster {cluster} ' + title
+    if zip_id is not None:
+        title = f'Person {str(zip_id)} ' + title
     dt_index = df_new.index.get_level_values('datetime')
     df_new['hour'] = dt_index.hour
     df_new['night_hour'] = df_new['hour'].map(night_hour)
@@ -399,7 +403,6 @@ def plot_night_time_series(df, zip_id=None, variables=None, night_start=17,
                       if method == 'dba'
                       else ['id', 'night_hour', 'hour', 'time']),
         x_col='time',
-        x_label='Hour',
         title=title,
         method=method,
         night_start=night_start,
@@ -430,7 +433,6 @@ def plot_hourly_means_for_individual(df, zip_id, variables=None):
         df_new, variables,
         groupby_cols=['hour'],
         x_col='hour',
-        x_label='Hour',
         title=f'Person {str(zip_id)} (hourly means across all days)'
     )
 

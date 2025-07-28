@@ -209,11 +209,11 @@ class Nights:
             'total_iob_nans': iob_nans,
             'total_bg_nans': bg_nans,
             'cob_nan_ratio':
-                cob_nans / count_of_nights * self.total_intervals(),
+                cob_nans / (count_of_nights * self.total_intervals()),
             'iob_nan_ratio':
-                iob_nans / count_of_nights * self.total_intervals(),
+                iob_nans / (count_of_nights * self.total_intervals()),
             'bg_nan_ratio':
-                bg_nans / count_of_nights * self.total_intervals(),
+                bg_nans / (count_of_nights * self.total_intervals()),
             'missed_interval_vectors':
                 [d['missed_interval_vector'] for d in self.stats_per_night],
         }

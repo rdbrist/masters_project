@@ -1,5 +1,6 @@
 from datetime import time
 from loguru import logger
+from pip._internal.resolution.resolvelib import candidates
 
 from src.candidate_selection import (remove_null_variable_individuals,
                                      create_nights_objects,
@@ -83,6 +84,7 @@ class SampleFilter:
             cob_nan_min, iob_nan_min, bg_nan_min = 1, 1, 1
         new_nights_objs = []
         night_count = 0
+        candidates = []
         for nights_obj in self.nights_objects:
             new_nights_list = (
                 filter_nights(nights_obj, missed_intervals=missed_intervals,
@@ -91,10 +93,11 @@ class SampleFilter:
                               iob_nan_min=iob_nan_min,
                               bg_nan_min=bg_nan_min))
             if len(new_nights_list) >= min_nights:
-                self.candidates.append(nights_obj.zip_id)
+                candidates.append(nights_obj.zip_id)
                 (new_nights_objs.
                  append(nights_obj.update_nights(new_nights_list)))
                 night_count += len(nights_obj.nights)
+        self.candidates = candidates
         self.nights_objects = new_nights_objs
         self.night_count = night_count
         if night_count != 0:
