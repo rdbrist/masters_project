@@ -258,7 +258,8 @@ class AnalyseRelationships:
         df_spearman = pd.DataFrame(
             columns=['lag', 'cluster', 'variables', 'time', 'correlation'])
         df_spearman = df_spearman.astype(
-            {'lag': 'int', 'cluster': 'int', 'variables': 'str', 'time': 'str',
+            {'lag': 'int', 'cluster': 'int', 'variables': 'str',
+             # 'time': 'str',
              'correlation': 'float'})
         for lag, df in self.processed_df.groupby('lag'):
             for v1, v2 in itertools.combinations(variables, 2):

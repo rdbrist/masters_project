@@ -337,7 +337,7 @@ def _plot_time_series_profile(
     plt.legend()
     plt.tight_layout()
     filename = title.replace(" ", "_").replace(":", "_").lower()
-    plt.savefig(FIGURES_DIR / f'{filename}.png', dpi=400)
+    plt.savefig(FIGURES_DIR / f'{filename}.png', dpi=400, bbox_inches='tight')
     plt.show()
 
 

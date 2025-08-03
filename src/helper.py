@@ -314,3 +314,10 @@ def cluster_colours():
         2: tab10_colors[2],
         3: tab10_colors[3]
     }
+
+def get_time_period(df, start_time, end_time):
+    """Filter DataFrame for rows within the specified time period."""
+    if end_time <= start_time:
+        return df[(df['time'] >= start_time) | (df['time'] < end_time)]
+    else:
+        return df[(df['time'] >= start_time) & (df['time'] < end_time)]

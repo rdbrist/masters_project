@@ -146,5 +146,5 @@ def plot_nights_vs_avg_intervals(df_overall_stats: pd.DataFrame):
               '(Marker size = Average Total Break Length in Minutes)')
     plt.ylim(top=max_y * 1.05)
     plt.tight_layout()
-    plt.savefig(FIGURES_DIR / 'nights_vs_avg_intervals.png', dpi=400)
+    plt.savefig(FIGURES_DIR / 'nights_vs_avg_intervals.png', dpi=400, bbox_inches='tight')
     plt.show()

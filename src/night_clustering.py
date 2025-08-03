@@ -22,7 +22,8 @@ class NightClustering:
     Class uses feature-based clustering to identify patterns in night periods,
     using the tsfresh library for feature extraction.
     """
-    def __init__(self, df, feature_settings='custom', night_start_hour=None):
+    def __init__(self, df, feature_settings='custom', night_start_hour=None,
+                 feature_variables=None):
         """
         Initialises the NightClustering with the preprocessed time series data.
         It is assumed the DataFrame has a MultiIndex with 'id' and 'datetime',
@@ -34,13 +35,15 @@ class NightClustering:
         """
         df = check_df_index(df)
 
-        if df.isna().sum().sum() != 0:
+        self.df = df.sort_index().copy()
+        if feature_variables:
+            self.variable_cols = feature_variables
+        else:
+            self.variable_cols = [col for col in df.columns if col not in
+                                  ['id', 'datetime']]
+        if df[self.variable_cols].isna().sum().sum() != 0:
             raise ValueError("Input DataFrame contains NaN values. "
                              "Please handle missing data before clustering.")
-
-        self.df = df.sort_index().copy()
-        self.variable_cols = [col for col in df.columns if col not in
-                              ['id', 'datetime']]
         self.customised_feature_dict = None
         self.feature_settings = self._get_feature_settings(feature_settings)
         self.night_start_hour = night_start_hour  # Default night start hour
@@ -203,7 +206,7 @@ class NightClustering:
         :param multi_threaded: (bool), If True, uses multi-threading for feature
 
         """
-        temp_df = self.df.reset_index()
+        temp_df = self.df[self.variable_cols].reset_index()
         night_start_date = (
             get_night_start_date(temp_df['datetime'], self.night_start_hour))
         temp_df['night_id'] = (
@@ -228,7 +231,7 @@ class NightClustering:
             kind_to_fc_parameters=self.customised_feature_dict,
             default_fc_parameters=self.feature_settings,
             impute_function=impute,
-            show_warnings=True,
+            show_warnings=False,
             n_jobs=n_jobs
             )
 
@@ -462,8 +465,10 @@ class NightClustering:
             get_night_start_date(new_df['datetime'], self.night_start_hour))
         new_df = new_df.reset_index().set_index(['id', 'night_start_date'])
         if scaled:
-            new_df[self.variable_cols] = StandardScaler().fit_transform(
-                new_df[self.variable_cols].values)
+            float_cols = [col for col in new_df.columns if
+                          pd.api.types.is_float_dtype(new_df[col])]
+            new_df[float_cols] = StandardScaler().fit_transform(
+                new_df[float_cols].values)
         new_df = new_df.join(temp)
         return new_df.reset_index().set_index(['id', 'datetime'])
 
@@ -730,7 +735,7 @@ class NightClustering:
                   )
         plt.savefig(FIGURES_DIR / f'cluster_distribution_{cluster_type}_'
                                   f'{len(pivot_counts.columns)}_clusters.png',
-                    dpi=400,)
+                    dpi=400, bbox_inches='tight')
         plt.show()
 
     def get_cluster_distributions(self, cluster_type='kmeans'):
