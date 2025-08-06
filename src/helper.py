@@ -86,8 +86,9 @@ def check_df_index(df: pd.DataFrame = None) -> pd.DataFrame:
             "['id', 'datetime'].")
     id_level = df.index.get_level_values('id')
     datetime_level = df.index.get_level_values('datetime')
-    if not pd.api.types.is_integer_dtype(id_level):
-        raise ValueError("Index level 'id' must be of integer dtype.")
+    if (not pd.api.types.is_integer_dtype(id_level) and
+            not pd.api.types.is_string_dtype(id_level)):
+        raise ValueError("Index level 'id' must be of integer or string dtype.")
     if not pd.api.types.is_datetime64_any_dtype(datetime_level):
         raise ValueError(
             "Index level 'datetime' must be of datetime dtype.")
