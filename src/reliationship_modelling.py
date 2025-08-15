@@ -112,7 +112,7 @@ class AnalyseRelationships:
         return results
 
     def apply_svm_regression(self, variables=['cob_lagged', 'iob_lagged'],
-                             split=False):
+                             split=False, **kwargs):
         """
         Apply SVM regression to the processed DataFrame.
 
@@ -124,7 +124,7 @@ class AnalyseRelationships:
         for (id_, night_start_date, cluster, lag), (train_df, test_df) in self._get_data_iter(split):
             X_train, y_train = train_df[variables].values, train_df['bg_mean_scaled'].values
             X_test, y_test = test_df[variables].values, test_df['bg_mean_scaled'].values
-            model = SVR(kernel='rbf').fit(X_train, y_train)
+            model = SVR(**kwargs).fit(X_train, y_train)
             y_pred = model.predict(X_test)
             results.append({
                 'id': id_,
@@ -248,37 +248,36 @@ class AnalyseRelationships:
     def get_processed_df(self):
         """
         Get the lagged sets of the dataset.
-
         :return: (pd.DataFrame) The processed DataFrame with lagged variables.
         """
         return self.processed_df
 
-    def calculate_spearman_correlation(self):
+    def calculate_correlation(self, corr_type='spearman'):
         variables = ['bg_mean_scaled', 'cob_lagged', 'iob_lagged']
-        df_spearman = pd.DataFrame(
+        df_corr = pd.DataFrame(
             columns=['lag', 'cluster', 'variables', 'time', 'correlation'])
-        df_spearman = df_spearman.astype(
+        df_corr = df_corr.astype(
             {'lag': 'int', 'cluster': 'int', 'variables': 'str',
              # 'time': 'str',
              'correlation': 'float'})
         for lag, df in self.processed_df.groupby('lag'):
             for v1, v2 in itertools.combinations(variables, 2):
-                df_spearman_temp =(
-                    AnalyseRelationships._spearman_correlation_by_time(df, v1,
-                                                                       v2))
-                df_spearman_temp['lag'] = lag
-                df_spearman_temp['variables'] = f'{v1} vs {v2}'
-                df_spearman = pd.concat([df_spearman, df_spearman_temp])
-        return df_spearman
+                df_corr_temp =(
+                    AnalyseRelationships._correlation_by_time(df, v1, v2,
+                                                              corr_type))
+                df_corr_temp['lag'] = lag
+                df_corr_temp['variables'] = f'{v1} vs {v2}'
+                df_corr = pd.concat([df_corr, df_corr_temp])
+        return df_corr
 
     @staticmethod
-    def _spearman_correlation_by_time(df, col1, col2):
+    def _correlation_by_time(df, col1, col2, corr_type):
         results = []
         for cluster, group in df.reset_index().groupby('cluster'):
             group['time'] = group['datetime'].dt.time
             for time, time_group in group.groupby('time'):
                 correlation = time_group[col1].corr(time_group[col2],
-                                                    method='spearman')
+                                                    method=corr_type)
                 results.append({'cluster': cluster, 'time': time,
                                 'correlation': correlation})
         return pd.DataFrame(results)
