@@ -507,6 +507,7 @@ class NightClustering:
         overlays show the unscaled feature means.
         :param cluster_type: (str) Defines which clusters to use
         """
+
         if self.night_features_df is None:
             raise ValueError("Night features not extracted yet. Run "
                              "extract_night_level_features first.")
@@ -532,11 +533,12 @@ class NightClustering:
         # Format annotation values for better readability
         annot_fmt = annot_data.round(2).astype(str)
 
+        print('Cluster Centroids: Scaled Feature Means (Unscaled Means '
+              'Overlay)')
         plt.figure(figsize=(6, 14))
         sns.heatmap(heatmap_data, annot=annot_fmt, fmt='', cmap='coolwarm',
                     center=0)
-        plt.title('Cluster Centroids: Scaled Feature Means (Unscaled Means '
-                  'Overlay)')
+
         plt.xlabel('Cluster', verticalalignment='top')
         plt.savefig(FIGURES_DIR / f'heatmap_cluster_features_{cluster_type}_'
                                   f'{len(set(clusters))}_clusters.png', dpi=400,
@@ -601,15 +603,15 @@ class NightClustering:
         elif cluster_type == 'umap':
             clusters = self.umap_clusters
 
+        print('t-SNE Visualisation of Night Features by KMeans Cluster')
         plt.figure(figsize=(6, 5))
         sns.scatterplot(x=self.tsne_results[:, 0], y=self.tsne_results[:, 1],
                         hue=clusters, palette=self.cluster_color_map, alpha=0.7)
-        plt.title('t-SNE Visualisation of Night Features by KMeans Cluster')
         plt.xlabel('t-SNE 1')
         plt.ylabel('t-SNE 2')
         plt.legend(title='Cluster', loc='lower right')
         plt.tight_layout()
-        plt.savefig(FIGURES_DIR / f'tsne_clusters_{len(clusters)}clusters.png', dpi=400,
+        plt.savefig(FIGURES_DIR / f'tsne_clusters_{len(np.unique(clusters))}clusters.png', dpi=400,
                     bbox_inches='tight')
         plt.show()
 

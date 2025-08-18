@@ -1,9 +1,11 @@
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import pandas as pd
 import seaborn as sns
 import numpy as np
 from loguru import logger
 from datetime import datetime, time, timedelta
+
 
 from sklearn.metrics import mean_absolute_error
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
@@ -13,6 +15,7 @@ from statsmodels.tsa.stattools import adfuller
 from src.config import FIGURES_DIR
 from src.dba import DBAAverager
 from src.features import FeatureSet
+from src.helper import normalise_overnight_time
 
 
 def split_ts(y: pd.DataFrame, ratio: float) -> (
@@ -225,34 +228,11 @@ def _plot_time_series_profile(
     else:
         raise ValueError("method must be 'mean' or 'dba'")
 
-    x = stats[x_col].astype(str)
-    x_labels = stats['time'].apply(lambda t: t.strftime('%H:%M'))
-    plt.figure(figsize=(10, 4))
-    colors = ['tab:green', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown']
+    x = stats[x_col].apply(lambda x: normalise_overnight_time(x, morning_end))
+    # x_labels = stats['time'].apply(lambda t: t.strftime('%H:%M'))
 
-    # for var, color in zip(variables, colors):
-    #     avg = stats[(var, method)]
-    #     var_col = stats.get((var, 'var'), None)
-    #
-    #     # Ensure var_col is a Series, not a float
-    #     if var_col is None or np.isscalar(var_col):
-    #         var_col = pd.Series([np.nan] * len(stats), index=stats.index)
-    #     else:
-    #         var_col = pd.to_numeric(var_col, errors='coerce')
-    #     if not prescaled:
-    #         min_val = global_min[var] if global_min is not None else avg.min()
-    #         max_val = global_max[var] if global_max is not None else avg.max()
-    #         stats[(var, 'mean_scaled')] = (avg - min_val) / (
-    #                     max_val - min_val + 1e-9)
-    #         stats[(var, 'std_scaled')] = np.sqrt(var_col) / (
-    #                     max_val - min_val + 1e-9)
-    #     else:
-    #         stats[(var, 'mean_scaled')] = avg
-    #         stats[(var, 'std_scaled')] = np.sqrt(var_col)
-    #     y = stats[(var, 'mean_scaled')]
-    #     yerr = stats[(var, 'std_scaled')]
-    #     plt.plot(x, y, label=f'{var} {method}', color=color)
-    #     plt.fill_between(x, y - yerr, y + yerr, color=color, alpha=0.2)
+    fig, ax = plt.subplots(figsize=(7, 3))
+    colors = ['tab:green', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown']
 
     # Plot mean variables
     for i, var in enumerate(variables):
@@ -293,51 +273,17 @@ def _plot_time_series_profile(
         plt.fill_between(x, y - yerr, y + yerr, color=colors[i % len(colors)],
                          alpha=0.2)
 
-    # Plot Excursion Data
-    if excursion_variable and excursion_variable in stats.columns.get_level_values(
-            0):
-        # The excursion variable is likely not scaled in the same way as bg mean, etc.
-        # It's an amplitude or a flag. We should plot it on a secondary axis or
-        # use markers on the primary axis, depending on its nature.
-
-        # Get the averaged excursion data
-        avg_excursion = stats[(excursion_variable, method)]
-
-        # If it's a binary flag, we might want to plot it as markers
-        if excursion_plot_type == 'markers':
-            # Find points where the average excursion flag is above a certain threshold (e.g., 0.1 for binary)
-            # or where amplitude is non-zero (for amplitude modes)
-            excursion_points_x = x[
-                avg_excursion > 0.05]  # Threshold to show where excursions are frequent
-            excursion_points_y = y[
-                avg_excursion > 0.05]  # Use the 'bg mean' y-value for positioning
-
-            # Plot markers at the corresponding 'bg mean' level
-            plt.scatter(excursion_points_x, excursion_points_y,
-                        marker='o', s=50, color=excursion_color,
-                        edgecolor='black',
-                        label=excursion_label,
-                        zorder=5)  # zorder to ensure markers are on top
-        elif excursion_plot_type == 'line':
-            # Plot as a separate line, possibly on a secondary y-axis if scales differ greatly
-            # For simplicity, plotting on primary axis for now. If scaling is an issue,
-            # a secondary y-axis (ax2 = plt.twinx()) would be needed.
-            plt.plot(x, avg_excursion, label=excursion_label,
-                     color=excursion_color, linestyle='--', linewidth=1.5)
-        elif excursion_plot_type == 'area':
-            # Fill area for amplitude
-            plt.fill_between(x, 0, avg_excursion, color=excursion_color,
-                             alpha=0.3, label=excursion_label)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    ax.xaxis.set_major_locator(mdates.HourLocator())
 
     plt.title(title)
     plt.ylabel('Scaled Mean')
-    plt.xticks(x, x_labels, rotation=90)
+    plt.xticks(rotation=90)
     if y_limits is not None:
         plt.ylim(y_limits)
     plt.legend()
-    plt.tight_layout()
     filename = title.replace(" ", "_").replace(":", "_").lower()
-    plt.savefig(FIGURES_DIR / f'{filename}.png', dpi=400, bbox_inches='tight')
+    plt.savefig(FIGURES_DIR / f'{filename}.png', bbox_inches='tight')
     plt.show()
 
 
@@ -416,25 +362,136 @@ def plot_night_time_series(df, zip_id=None, variables=None, night_start=17,
         excursion_plot_type=excursion_plot_type
     )
 
+#
+# def plot_night_time_series(df, zip_id=None, variables=None, night_start=17,
+#                            morning_end=11, method='mean',
+#                            y_limits: tuple = None, rolling_window=None,
+#                            global_min=None, global_max=None, prescaled=True,
+#                            include_excursions: bool = False,
+#                            excursion_plot_type='markers', cluster=None):
+#     """
+#     Plot the means of specified variables for a group of nights.
+#     """
+#     if variables is None:
+#         variables = ['iob mean', 'cob mean', 'bg mean']
+#
+#     def night_hour(hour):
+#         return (hour - night_start if hour >= night_start
+#                 else 24 - night_start + hour)
+#
+#     df_new = df.copy()
+#
+#     night_count = len(df_new.
+#                       reset_index()[['id', 'night_start_date']].
+#                       drop_duplicates())
+#     title = f'Nights: {night_count}'
+#     if cluster is not None:
+#         title = f'Cluster {cluster} ' + title
+#     if zip_id is not None:
+#         title = f'Person {str(zip_id)} ' + title
+#
+#     dt_index = df_new.index.get_level_values('datetime')
+#     df_new['hour'] = dt_index.hour
+#     df_new['night_hour'] = df_new['hour'].map(night_hour)
+#
+#     df_new = df_new[(df_new['hour'] >= night_start) |
+#                     (df_new['hour'] < morning_end)]
+#
+#     excursion_var_to_plot = None
+#     if include_excursions and 'excursion_amplitude' not in df_new.columns:
+#         raise ValueError('Excursion variable not found in variables.')
+#     elif include_excursions:
+#         excursion_var_to_plot = 'excursion_amplitude'
+#
+#     groupby_cols = (['id', 'night_start_date', 'night_hour', 'hour', 'time']
+#                     if method == 'dba'
+#                     else ['id', 'night_hour', 'hour', 'time'])
+#
+#     if method == 'mean':
+#         stats = (df_new.groupby(groupby_cols)[variables].
+#                  agg(['mean', 'var']).reset_index())
+#     elif method == 'dba':
+#         dbaa = DBAAverager(df_new[variables + (
+#             [excursion_var_to_plot] if excursion_var_to_plot else [])],
+#                            night_start_hour=night_start,
+#                            morning_end_hour=morning_end)
+#         stats = (
+#             dbaa.get_dba_and_variance_dataframe(rolling_window=rolling_window))
+#         if stats is None:
+#             logger("No DBA averaged DataFrame available.")
+#             return
+#     else:
+#         raise ValueError("method must be 'mean' or 'dba'")
+#
+#     fig, ax = plt.subplots(figsize=(8, 3))
+#     colors = ['tab:green', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown']
+#
+#     for i, var in enumerate(variables):
+#         avg = stats[(var, 'mean')]
+#         var_col = stats.get((var, 'var'), None)
+#
+#         y = avg
+#         yerr = np.sqrt(var_col) if var_col is not None else 0
+#
+#         plt.plot(stats['time'], y, label=f'{var} {method}',
+#                  color=colors[i % len(colors)], linewidth=2)
+#         plt.fill_between(stats['time'], y - yerr, y + yerr,
+#                          color=colors[i % len(colors)], alpha=0.2)
+#
+#     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+#     ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
+#
+#     plt.title(title)
+#     plt.ylabel('Scaled Mean')
+#     plt.xticks(rotation=90)
+#     if y_limits is not None:
+#         plt.ylim(y_limits)
+#     plt.legend()
+#     plt.tight_layout()
+#     filename = title.replace(" ", "_").replace(":", "_").lower()
+#     plt.savefig(FIGURES_DIR / f'{filename}.png', dpi=400, bbox_inches='tight')
+#     plt.show()
+
 
 def plot_hourly_means_for_individual(df, zip_id, variables=None):
     """
     Plot the hourly means of specified variables for an individual.
-    :param df: DataFrame containing time series data with a multi-index
-        including 'id' and 'datetime'.
+    :param df: DataFrame containing time series data.
     :param zip_id: int, identifier for the individual.
-    :param variables: list of str, names of the variables to plot. If None,
-        ['iob mean', 'cob mean', 'bg mean'] are used
+    :param variables: list of str, names of the variables to plot.
     """
     if variables is None:
         variables = ['iob mean', 'cob mean', 'bg mean']
+
     df_new = df.copy()
-    _plot_time_series_profile(
-        df_new, variables,
-        groupby_cols=['hour'],
-        x_col='hour',
-        title=f'Person {str(zip_id)} (hourly means across all days)'
-    )
+    if 'datetime' in df_new.index.names:
+        df_new['hour'] = df_new.index.get_level_values('datetime').hour
+    else:
+        # Assuming 'datetime' is a column if not an index level
+        df_new['hour'] = pd.to_datetime(df_new['datetime']).dt.hour
+
+    stats = df_new.groupby('hour')[variables].agg(['mean', 'var']).reset_index()
+
+    fig, ax = plt.subplots(figsize=(8, 3))
+    colors = ['tab:green', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown']
+
+    for i, var in enumerate(variables):
+        avg = stats[(var, 'mean')]
+        var_col = stats.get((var, 'var'), None)
+        yerr = np.sqrt(var_col) if var_col is not None else 0
+
+        plt.plot(stats['hour'], avg, label=f'{var} mean',
+                 color=colors[i % len(colors)], linewidth=2)
+        plt.fill_between(stats['hour'], avg - yerr, avg + yerr,
+                         color=colors[i % len(colors)], alpha=0.2)
+
+    plt.title(f'Person {str(zip_id)} (hourly means across all days)')
+    plt.xlabel('Hour of the day')
+    plt.ylabel('Mean')
+    plt.xticks(stats['hour'])
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
 
 def return_count_intervals(start: time, end: time,

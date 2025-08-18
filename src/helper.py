@@ -1,12 +1,9 @@
-# various convenience methods
-
-# calculates a df of all the different read records
 import dataclasses
 import glob
-from datetime import time, datetime, timedelta
-
 import pandas as pd
 import numpy as np
+
+from datetime import time, datetime, timedelta
 from scipy.stats import skew, kurtosis
 from typing import Tuple, List, Union
 from pathlib import Path
@@ -283,9 +280,6 @@ def format_xticks_as_hhmm(ax, unique_times_str_list):
     ax.set_xticks(range(len(unique_times_str_list)))
     # Set the tick labels to be the HH:MM strings
     ax.set_xticklabels(unique_times_str_list, rotation=45, ha='right')
-
-import pandas as pd
-import numpy as np
 
 def generate_alphabetical_aliases(ids_input):
     unique_ids_sorted_array = np.unique(ids_input)
