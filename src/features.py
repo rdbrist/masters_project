@@ -192,15 +192,13 @@ class FeatureSet:
         qualifying excursion is defined as a change in 'bg mean' between a peak-
         nadir or nadir-peak, that exceeds one standard deviation of the
         'bg mean' values for that specific 'night'. The function adds a new
-        column 'excursion_amplitude' to the input DataFrame. This
-        column will contain the amplitude of the qualifying excursion if the
-        data point is a peak or nadir of such an excursion. If a point is part
-        of multiple qualifying excursions (e.g., a peak is the end of one upward
-        and the start of a downward excursion), the maximum amplitude associated
-        with it is assigned. For data points not part of any qualifying
-        excursion, the value will be 0.0.
+        column 'excursion_amplitude' if the data point is a peak or nadir of
+        such an excursion. If a point is part of multiple qualifying excursions
+        (e.g., a peak is the end of one upward and the start of a downward
+        excursion), the maximum amplitude associated with it is assigned. For
+        data points not part of any qualifying excursion, the value will be 0.0.
         :param mode: (str) Determines how the 'excursion_amplitude'
-            column is populated.
+            column is populated.|
             Options:
             - 'turning_point_max_amplitude' (default): Assigns the maximum
             amplitude of any qualifying excursion to its turning points
