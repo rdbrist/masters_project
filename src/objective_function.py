@@ -1,12 +1,8 @@
-from datetime import time
 from math import sqrt
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
 from src.features import FeatureSet
-from src.nights import Nights
-from test_read import input_file
-
 
 class ObjectiveFunction:
     """

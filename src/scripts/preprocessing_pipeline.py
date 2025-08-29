@@ -8,7 +8,6 @@ from src.candidate_selection import remove_null_variable_individuals, \
     get_all_individuals_night_stats, plot_nights_vs_avg_intervals
 from src.nights import Nights, consolidate_df_from_nights
 from src.configurations import Configuration, Irregular, ThirtyMinute
-from src.data_analysis import nans_per_column
 from src.data_processing.read import (read_all_device_status,
                                       get_all_offsets_df_from_profiles)
 from src.data_processing.read_preprocessed_df import (
@@ -18,7 +17,8 @@ from src.data_processing.format import as_flat_dataframe
 from src.data_processing.preprocess import dedup_device_status_dataframes
 from src.data_processing.resampling import ResampleDataFrame
 from src.config import INTERIM_DATA_DIR
-from src.helper import separate_flat_file, filter_separated_by_ids
+from src.helper import separate_flat_file, filter_separated_by_ids, \
+    nans_per_column
 from src.night_clustering import NightClustering
 from src.time_series_analysis import plot_night_time_series
 

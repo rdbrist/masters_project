@@ -286,7 +286,8 @@ def generate_alphabetical_aliases(ids_input):
     unique_ids = unique_ids_sorted_array.tolist()
 
     if len(unique_ids) > 26:
-        raise ValueError(f"Too many unique IDs ({len(unique_ids)}). Can only generate aliases for up to 26 unique IDs.")
+        raise ValueError(f"Too many unique IDs ({len(unique_ids)}). Can only "
+                         f"generate aliases for up to 26 unique IDs.")
 
     aliases_map = {}
     alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -316,3 +317,21 @@ def get_time_period(df, start_time, end_time):
         return df[(df['time'] >= start_time) | (df['time'] < end_time)]
     else:
         return df[(df['time'] >= start_time) & (df['time'] < end_time)]
+
+
+def nans_per_column(df):
+    """
+    Provides a summary of NaN counts per column in the DataFrame.
+    """
+    nan_counts = df.isna().sum()
+    print("Total NaNs per column:")
+    print(nan_counts)
+    df_isna = df[df['cob mean'].isna()]
+    print(
+        'Count of intervals with NaNs for COB columns, i.e. missing COB data.')
+    df_isna.groupby(by=['id', 'day'])['day'].count()
+    print('Count number of consecutive NaNs in cob mean column:')
+    df_reset = df_isna.reset_index().sort_values(['id', 'datetime'])
+    df_reset['time_diff'] = df_reset.groupby('id')[
+                                'datetime'].diff().dt.total_seconds() / 60
+    df_reset.groupby('id')['time_diff'].apply(lambda x: (x == 30).sum())

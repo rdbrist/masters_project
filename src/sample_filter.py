@@ -1,6 +1,5 @@
 from datetime import time
 from loguru import logger
-from pip._internal.resolution.resolvelib import candidates
 
 from src.candidate_selection import (remove_null_variable_individuals,
                                      create_nights_objects,

@@ -5,8 +5,6 @@ import seaborn as sns
 import numpy as np
 from loguru import logger
 from datetime import datetime, time, timedelta
-
-
 from sklearn.metrics import mean_absolute_error
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.arima.model import ARIMA
@@ -361,96 +359,6 @@ def plot_night_time_series(df, zip_id=None, variables=None, night_start=17,
         excursion_variable=excursion_var_to_plot,
         excursion_plot_type=excursion_plot_type
     )
-
-#
-# def plot_night_time_series(df, zip_id=None, variables=None, night_start=17,
-#                            morning_end=11, method='mean',
-#                            y_limits: tuple = None, rolling_window=None,
-#                            global_min=None, global_max=None, prescaled=True,
-#                            include_excursions: bool = False,
-#                            excursion_plot_type='markers', cluster=None):
-#     """
-#     Plot the means of specified variables for a group of nights.
-#     """
-#     if variables is None:
-#         variables = ['iob mean', 'cob mean', 'bg mean']
-#
-#     def night_hour(hour):
-#         return (hour - night_start if hour >= night_start
-#                 else 24 - night_start + hour)
-#
-#     df_new = df.copy()
-#
-#     night_count = len(df_new.
-#                       reset_index()[['id', 'night_start_date']].
-#                       drop_duplicates())
-#     title = f'Nights: {night_count}'
-#     if cluster is not None:
-#         title = f'Cluster {cluster} ' + title
-#     if zip_id is not None:
-#         title = f'Person {str(zip_id)} ' + title
-#
-#     dt_index = df_new.index.get_level_values('datetime')
-#     df_new['hour'] = dt_index.hour
-#     df_new['night_hour'] = df_new['hour'].map(night_hour)
-#
-#     df_new = df_new[(df_new['hour'] >= night_start) |
-#                     (df_new['hour'] < morning_end)]
-#
-#     excursion_var_to_plot = None
-#     if include_excursions and 'excursion_amplitude' not in df_new.columns:
-#         raise ValueError('Excursion variable not found in variables.')
-#     elif include_excursions:
-#         excursion_var_to_plot = 'excursion_amplitude'
-#
-#     groupby_cols = (['id', 'night_start_date', 'night_hour', 'hour', 'time']
-#                     if method == 'dba'
-#                     else ['id', 'night_hour', 'hour', 'time'])
-#
-#     if method == 'mean':
-#         stats = (df_new.groupby(groupby_cols)[variables].
-#                  agg(['mean', 'var']).reset_index())
-#     elif method == 'dba':
-#         dbaa = DBAAverager(df_new[variables + (
-#             [excursion_var_to_plot] if excursion_var_to_plot else [])],
-#                            night_start_hour=night_start,
-#                            morning_end_hour=morning_end)
-#         stats = (
-#             dbaa.get_dba_and_variance_dataframe(rolling_window=rolling_window))
-#         if stats is None:
-#             logger("No DBA averaged DataFrame available.")
-#             return
-#     else:
-#         raise ValueError("method must be 'mean' or 'dba'")
-#
-#     fig, ax = plt.subplots(figsize=(8, 3))
-#     colors = ['tab:green', 'tab:orange', 'tab:blue', 'tab:purple', 'tab:brown']
-#
-#     for i, var in enumerate(variables):
-#         avg = stats[(var, 'mean')]
-#         var_col = stats.get((var, 'var'), None)
-#
-#         y = avg
-#         yerr = np.sqrt(var_col) if var_col is not None else 0
-#
-#         plt.plot(stats['time'], y, label=f'{var} {method}',
-#                  color=colors[i % len(colors)], linewidth=2)
-#         plt.fill_between(stats['time'], y - yerr, y + yerr,
-#                          color=colors[i % len(colors)], alpha=0.2)
-#
-#     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-#     ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
-#
-#     plt.title(title)
-#     plt.ylabel('Scaled Mean')
-#     plt.xticks(rotation=90)
-#     if y_limits is not None:
-#         plt.ylim(y_limits)
-#     plt.legend()
-#     plt.tight_layout()
-#     filename = title.replace(" ", "_").replace(":", "_").lower()
-#     plt.savefig(FIGURES_DIR / f'{filename}.png', dpi=400, bbox_inches='tight')
-#     plt.show()
 
 
 def plot_hourly_means_for_individual(df, zip_id, variables=None):

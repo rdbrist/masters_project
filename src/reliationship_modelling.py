@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import KFold
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from statsmodels.formula.api import ols
 from sklearn.svm import SVR
 from sklearn.ensemble import RandomForestRegressor
@@ -18,7 +18,7 @@ class AnalyseRelationships:
     Class to analyse relationships between different variables in a dataset.
     """
 
-    def __init__(self, df, train_test_split=0.8):
+    def __init__(self, df, stationary=False, train_test_split=0.8):
         """
         Initialise with the dataset, which introduces the lags needed for analysis.
 
@@ -33,17 +33,29 @@ class AnalyseRelationships:
         df = check_df_index(df)
 
         self.df = df.sort_index()
-        self.lag_range = range(0, 5)
+        self.lag_range = range(0, 6)
         self.variables = ['cob mean', 'iob mean', 'bg mean']
         self.scaled_cols = ['cob_mean_scaled', 'iob_mean_scaled', 'bg_mean_scaled']
 
-        minmax = MinMaxScaler(feature_range=(0, 1))
-        self.df[self.scaled_cols] = minmax.fit_transform(self.df[self.variables])
+        # minmax = MinMaxScaler(feature_range=(0, 1))
+        # self.df[self.scaled_cols] = minmax.fit_transform(self.df[self.variables])
+        scaler = StandardScaler()
+        self.df[self.scaled_cols] = scaler.fit_transform(
+            self.df[self.variables])
 
         self.processed_df = pd.DataFrame()
 
         for lag in self.lag_range:
             for (id_, night_start_date, cluster), df_night in self.df.groupby(['id', 'night_start_date', 'cluster']):
+                if stationary:
+                    df_night = AnalyseRelationships._create_regular_intervals(df_night)
+                    df_night[self.scaled_cols] = (
+                        df_night[self.scaled_cols].transform(
+                            lambda x: x.interpolate(method='linear', axis=0)
+                        ))
+                    for c in self.scaled_cols:
+                        df_night[c] = df_night[c].diff()
+                    df_night.dropna(subset=self.scaled_cols, inplace=True)
                 df_lagged = df_night[self.scaled_cols].reset_index(level='id', drop=True)
                 df_lagged['cob_lagged'] = df_lagged['cob_mean_scaled'].shift(lag)
                 df_lagged['iob_lagged'] = df_lagged['iob_mean_scaled'].shift(lag)
@@ -53,28 +65,52 @@ class AnalyseRelationships:
 
         self.train_test_sets = self._train_test_split(train_test_split)
 
+    @staticmethod
+    def _create_regular_intervals(df):
+        """
+        Create regular 30-minute intervals for the DataFrame.
+        :param df: (pd.DataFrame) The input DataFrame with a DateTimeIndex.
+        :return: (pd.DataFrame) The DataFrame reindexed to 30-minute intervals.
+        """
+        df = df.reset_index().set_index('datetime').copy()
+        start_time = df.index.min()
+        end_time = df.index.max()
+        full_index = pd.date_range(start=start_time, end=end_time, freq='30min')
+        df = df.reindex(full_index)
+        df['id'] = df['id'].ffill()
+        df['night_start_date'] = df['night_start_date'].ffill()
+        df['cluster'] = df['cluster'].ffill()
+        df = df.reset_index().rename(columns={'level_0': 'datetime'})
+        return df.set_index(['id', 'datetime'])
+
     def _train_test_split(self, train_test_split=0.8):
         """
-        Split each night into training and testing sets based on the ratio given in the parameter,
-        and return a dictionary with each night's training and testing sets.
+        Split each night into training and testing sets based on the ratio given
+        in the parameter, and return a dictionary with each night's training and
+         testing sets.
 
         :param train_test_split: (float) The ratio of training to testing data. Default is 0.8.
         :return: (dict) A dictionary with keys as tuples of (id, night_start_date, cluster, lag)
                  and values as tuples of (train_df, test_df).
         """
         train_test_dict = {}
-        for (id_, night_start_date, cluster, lag), df_night in self.processed_df.groupby(['id', 'night_start_date', 'cluster', 'lag']):
+        for (id_, night_start_date, cluster, lag), df_night in (
+                self.processed_df.groupby(['id', 'night_start_date',
+                                           'cluster', 'lag'])):
             split_index = int(len(df_night) * train_test_split)
             train_df = df_night.iloc[:split_index]
             test_df = df_night.iloc[split_index:]
-            train_test_dict[(id_, night_start_date, cluster, lag)] = (train_df, test_df)
+            train_test_dict[(id_, night_start_date, cluster, lag)] = (train_df,
+                                                                      test_df)
         return train_test_dict
 
     def _get_data_iter(self, split):
         """
-        Internal helper to yield (key, (train_df, test_df)) pairs for either split or full data.
+        Internal helper to yield (key, (train_df, test_df)) pairs for either
+        split or full data.
 
-        :param split: (bool) If True, use train/test splits; if False, use full data for both train and test.
+        :param split: (bool) If True, use train/test splits; if False, use full
+           data for both train and test.
         :return: generator yielding (key, (train_df, test_df))
         """
         if split:

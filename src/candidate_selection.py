@@ -1,9 +1,8 @@
-from typing import List, Tuple
-
 import pandas as pd
 from loguru import logger
 from matplotlib import pyplot as plt
 from datetime import time
+from typing import List, Tuple
 
 from src.helper import check_df_index
 from src.config import FIGURES_DIR
@@ -146,5 +145,6 @@ def plot_nights_vs_avg_intervals(df_overall_stats: pd.DataFrame):
               '(Marker size = Average Total Break Length in Minutes)')
     plt.ylim(top=max_y * 1.05)
     plt.tight_layout()
-    plt.savefig(FIGURES_DIR / 'nights_vs_avg_intervals.png', dpi=400, bbox_inches='tight')
+    plt.savefig(FIGURES_DIR / 'nights_vs_avg_intervals.png', dpi=400,
+                bbox_inches='tight')
     plt.show()

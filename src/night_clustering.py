@@ -611,7 +611,9 @@ class NightClustering:
         plt.ylabel('t-SNE 2')
         plt.legend(title='Cluster', loc='lower right')
         plt.tight_layout()
-        plt.savefig(FIGURES_DIR / f'tsne_clusters_{len(np.unique(clusters))}clusters.png', dpi=400,
+        plt.savefig(FIGURES_DIR / f'tsne_clusters_'
+                                  f'{len(np.unique(clusters))}clusters.png',
+                    dpi=400,
                     bbox_inches='tight')
         plt.show()
 
