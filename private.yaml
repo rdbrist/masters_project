@@ -4,7 +4,7 @@
 
 # full path to the folder containing the zip files downloaded from Dropbox -
 # DO NOT SHARE THIS DATA
-openAPS_data_path : 'C:\Users\ross\OneDrive - University of Bristol\Masters Project\n183 data'
+openAPS_data_path : 'data/raw/'
 
 #this property decides if the scripts that write the preprocessed data write a
 # file per person (FALSE) or a single .csv file containing everyone's data
